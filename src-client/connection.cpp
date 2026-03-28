@@ -52,7 +52,7 @@ bool send_file_tls(const char* server_ip, int port,const char* track_root, const
 }
 
 Connection* open_connection(const char* server_ip, int port) {
-    // 1. Initialize OpenSSL
+    // Initialize OpenSSL
     SSL_library_init();
     SSL_load_error_strings();
     OpenSSL_add_all_algorithms();
@@ -116,7 +116,7 @@ Connection* open_connection(const char* server_ip, int port) {
     long verify_result = SSL_get_verify_result(ssl);
     if (verify_result != X509_V_OK) {
         std::cerr << "Server certificate verification failed: " << X509_verify_cert_error_string(verify_result) << "\n";
-        SSL_shutdown(ssl);
+        shutdown_ssl(ssl);
         SSL_free(ssl);
         close(sock);
         SSL_CTX_free(ctx);
@@ -129,16 +129,20 @@ Connection* open_connection(const char* server_ip, int port) {
 void close_connection(Connection* conn) {
     if (!conn) return;
 
-    int shutdown_result;
-    do {
-        shutdown_result = SSL_shutdown(conn->ssl);
-        if (shutdown_result != 1 && shutdown_result != 0) {
-            std::cerr << "SSL shutdown failed\n";
-        }
-    } while (shutdown_result == 0);
+    shutdown_ssl(conn->ssl);
 
     SSL_free(conn->ssl);
     close(conn->sock);
     SSL_CTX_free(conn->ctx);
     delete conn;
+}
+
+void shutdown_ssl(SSL* ssl) {
+    int shutdown_result;
+    do {
+        shutdown_result = SSL_shutdown(ssl);
+        if (shutdown_result != 1 && shutdown_result != 0) {
+            std::cerr << "SSL shutdown failed\n";
+        }
+    } while (shutdown_result == 0);
 }

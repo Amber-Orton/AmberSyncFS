@@ -66,60 +66,71 @@ int main() {
         long verify_result = SSL_get_verify_result(ssl);
         if (verify_result != X509_V_OK) {
             std::cerr << "Client certificate verification failed: " << X509_verify_cert_error_string(verify_result) << "\n";
-            SSL_shutdown(ssl);
+            shutdown_ssl(ssl);
             SSL_free(ssl);
             close(client_fd);
             continue;
         }
 
 
-        uint32_t name_len = 0;
-        int n1 = SSL_read(ssl, &name_len, sizeof(name_len));
-        std::cout << "[DEBUG] Read file name length: " << n1 << " bytes\n" << std::flush;
-        name_len = ntohl(name_len);
-        if (name_len == 0 || name_len > 256) {
-            std::cerr << "Invalid filename length: " << name_len << "\n" << std::flush;
+        if(receive_file(ssl) < 0) {
+            std::cerr << "Failed to receive file\n";
+            shutdown_ssl(ssl);
             SSL_free(ssl);
             close(client_fd);
             continue;
         }
 
-        char filename[257] = {0};
-        int n2 = SSL_read(ssl, filename, name_len);
-        filename[name_len] = '\0';
-        std::cout << "[DEBUG] Read file name: '" << filename << "' (" << n2 << " bytes)\n" << std::flush;
-
-        std::ofstream outfile(filename, std::ios::binary);
-        if (!outfile) {
-            std::cerr << "Failed to open file for writing: " << filename << "\n" << std::flush;
-            SSL_free(ssl);
-            close(client_fd);
-            continue;
-        }
-        std::cout << "Receiving file: '" << filename << "'..." << std::endl << std::flush;
-        char buffer[4096];
-        int bytes;
-        size_t total_bytes = 0;
-        while ((bytes = SSL_read(ssl, buffer, sizeof(buffer))) > 0) {
-            outfile.write(buffer, bytes);
-            total_bytes += bytes;
-        }
-        std::cout << "Received file: '" << filename << "' (" << total_bytes << " bytes)" << std::endl << std::flush;
-        
-        outfile.flush();
-        outfile.close();
-
-        int shutdown_result;
-        do {
-            shutdown_result = SSL_shutdown(ssl);
-            if (shutdown_result != 1 && shutdown_result != 0) {
-                std::cerr << "SSL shutdown failed\n";
-            }
-        } while (shutdown_result == 0);
+        shutdown_ssl(ssl);
         SSL_free(ssl);
         close(client_fd);
     }
     SSL_CTX_free(ctx);
     close(server_fd);
+    return 0;
+}
+
+void shutdown_ssl(SSL* ssl) {
+    int shutdown_result;
+    do {
+        shutdown_result = SSL_shutdown(ssl);
+        if (shutdown_result != 1 && shutdown_result != 0) {
+            std::cerr << "SSL shutdown failed\n";
+        }
+    } while (shutdown_result == 0);
+}
+
+int receive_file(SSL* ssl) {
+    uint32_t name_len = 0;
+    int n1 = SSL_read(ssl, &name_len, sizeof(name_len));
+    std::cout << "[DEBUG] Read file name length: " << n1 << " bytes\n" << std::flush;
+    name_len = ntohl(name_len);
+    if (name_len == 0 || name_len > 256) {
+        std::cerr << "Invalid filename length: " << name_len << "\n" << std::flush;
+        return -1;
+    }
+
+    char filename[257] = {0};
+    int n2 = SSL_read(ssl, filename, name_len);
+    filename[name_len] = '\0';
+    std::cout << "[DEBUG] Read file name: '" << filename << "' (" << n2 << " bytes)\n" << std::flush;
+
+    std::ofstream outfile(filename, std::ios::binary);
+    if (!outfile) {
+        std::cerr << "Failed to open file for writing: " << filename << "\n" << std::flush;
+        return -1;
+    }
+    std::cout << "Receiving file: '" << filename << "'..." << std::endl << std::flush;
+    char buffer[4096];
+    int bytes;
+    size_t total_bytes = 0;
+    while ((bytes = SSL_read(ssl, buffer, sizeof(buffer))) > 0) {
+        outfile.write(buffer, bytes);
+        total_bytes += bytes;
+    }
+    std::cout << "Received file: '" << filename << "' (" << total_bytes << " bytes)" << std::endl << std::flush;
+    
+    outfile.flush();
+    outfile.close();
     return 0;
 }
