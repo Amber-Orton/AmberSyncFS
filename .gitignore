@@ -84,4 +84,4 @@ ambersyncfs
 .idea/
 
 # Ambers testing output files
-tests/
+test-*/

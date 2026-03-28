@@ -8,8 +8,23 @@
 #include <openssl/ssl.h>
 #include <openssl/err.h>
 #include "server.h"
+#include <filesystem>
 
-int main() {
+int main(int argc, char *argv[]) {
+	if (argc != 2) {
+		fprintf(stderr, "Usage: %s <directory>\n", argv[0]);
+		return 1;
+	}
+
+    // collect the directory to be synced to
+    // and check that it exists and is a directory
+    const char* directory = argv[1];
+    if (!std::filesystem::exists(directory) || !std::filesystem::is_directory(directory)) {
+        std::cerr << "Provided path is not a valid directory: " << directory << "\n";
+        return 1;
+    }
+
+
     int port = 12345;
 
     // 1. Initialize OpenSSL
@@ -89,7 +104,7 @@ int main() {
         // Handle command its the programmers responsibility to ensure that commands are all distinct and of a fixed length
         if (std::strncmp(command, "UP", 2) == 0) {
              std::cout << "Received upload command from client\n";
-            if(receive_file(ssl) < 0) {
+            if(receive_file(ssl, directory) < 0) {
                 std::cerr << "Failed to receive file\n";
                 shutdown_ssl(ssl);
                 SSL_free(ssl);
@@ -119,7 +134,7 @@ void shutdown_ssl(SSL* ssl) {
     } while (shutdown_result == 0);
 }
 
-int receive_file(SSL* ssl) {
+int receive_file(SSL* ssl, const char* directory) {
     uint32_t name_len = 0;
     int n1 = SSL_read(ssl, &name_len, sizeof(name_len));
     std::cout << "[DEBUG] Read file name length: " << n1 << " bytes\n" << std::flush;
@@ -134,7 +149,7 @@ int receive_file(SSL* ssl) {
     filename[name_len] = '\0';
     std::cout << "[DEBUG] Read file name: '" << filename << "' (" << n2 << " bytes)\n" << std::flush;
 
-    std::ofstream outfile(filename, std::ios::binary);
+    std::ofstream outfile(std::filesystem::path(directory) / filename, std::ios::binary);
     if (!outfile) {
         std::cerr << "Failed to open file for writing: " << filename << "\n" << std::flush;
         return -1;
