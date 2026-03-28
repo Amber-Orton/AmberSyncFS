@@ -6,16 +6,53 @@
 #include <cstring>
 #include <openssl/ssl.h>
 #include <openssl/err.h>
+#include <ostream>
+#include "connection.h"
 
-bool send_file_tls(const char* server_ip, int port, const char* file_path) {
-    // 1. Open file
+
+using Connection = struct connection;
+
+bool send_file_tls(const char* server_ip, int port,const char* track_root, const char* relative_file_path) {
+    // Open file
+    std::string file_path = std::string(track_root) + "/" + relative_file_path;
     std::ifstream file(file_path, std::ios::binary);
     if (!file) {
         std::cerr << "Failed to open file\n";
         return false;
     }
 
-    // 2. Initialize OpenSSL
+    // Establish TLS connection
+    Connection* conn = open_connection(server_ip, port);
+    if (!conn) {
+        std::cerr << "Failed to open TLS connection\n";
+        return false;
+    }
+
+    // Send file name length and name
+    std::string filename = relative_file_path; // Send relative path for server dir structure
+    uint32_t name_len = htonl(filename.size());
+    SSL_write(conn->ssl, &name_len, sizeof(name_len));
+    SSL_write(conn->ssl, filename.c_str(), filename.size());
+
+    // Send file data
+    char buffer[4096];
+    while (file) {
+        file.read(buffer, sizeof(buffer));
+        std::streamsize bytes = file.gcount();
+        if (bytes > 0) {
+            SSL_write(conn->ssl, buffer, bytes);
+        }
+    }
+
+    // Ensure file is flushed and closed before shutting down SSL
+    file.close();
+
+    close_connection(conn);
+    return true;
+}
+
+Connection* open_connection(const char* server_ip, int port) {
+    // 1. Initialize OpenSSL
     SSL_library_init();
     SSL_load_error_strings();
     OpenSSL_add_all_algorithms();
@@ -23,32 +60,32 @@ bool send_file_tls(const char* server_ip, int port, const char* file_path) {
     SSL_CTX* ctx = SSL_CTX_new(TLS_client_method());
     if (!ctx) {
         std::cerr << "Failed to create SSL_CTX\n";
-        return false;
+        return nullptr;
     }
 
 
     // Load CA or server certificate for validation
-    if (SSL_CTX_load_verify_locations(ctx, "server.crt", nullptr) != 1) {
+    if (SSL_CTX_load_verify_locations(ctx, "certs/ca.crt", nullptr) != 1) {
         std::cerr << "Failed to load CA/server certificate for validation\n";
         SSL_CTX_free(ctx);
-        return false;
+        return nullptr;
     }
     SSL_CTX_set_verify(ctx, SSL_VERIFY_PEER, nullptr);
 
     // Load client certificate and private key for mutual authentication
-    if (SSL_CTX_use_certificate_file(ctx, "client.crt", SSL_FILETYPE_PEM) <= 0 ||
-        SSL_CTX_use_PrivateKey_file(ctx, "client.key", SSL_FILETYPE_PEM) <= 0) {
+    if (SSL_CTX_use_certificate_file(ctx, "certs/client.crt", SSL_FILETYPE_PEM) <= 0 ||
+        SSL_CTX_use_PrivateKey_file(ctx, "certs/client.key", SSL_FILETYPE_PEM) <= 0) {
         std::cerr << "Failed to load client cert/key for mutual TLS\n";
         SSL_CTX_free(ctx);
-        return false;
+        return nullptr;
     }
 
-    // 3. Create socket
+    // 2. Create socket
     int sock = socket(AF_INET, SOCK_STREAM, 0);
     if (sock < 0) {
         std::cerr << "Socket creation failed\n";
         SSL_CTX_free(ctx);
-        return false;
+        return nullptr;
     }
 
     sockaddr_in server_addr{};
@@ -60,10 +97,10 @@ bool send_file_tls(const char* server_ip, int port, const char* file_path) {
         std::cerr << "Connection failed\n";
         close(sock);
         SSL_CTX_free(ctx);
-        return false;
+        return nullptr;
     }
 
-    // 4. Wrap socket with SSL
+    // 3. Wrap socket with SSL
     SSL* ssl = SSL_new(ctx);
     SSL_set_fd(ssl, sock);
 
@@ -72,7 +109,7 @@ bool send_file_tls(const char* server_ip, int port, const char* file_path) {
         SSL_free(ssl);
         close(sock);
         SSL_CTX_free(ctx);
-        return false;
+        return nullptr;
     }
 
     // Verify server certificate
@@ -83,38 +120,25 @@ bool send_file_tls(const char* server_ip, int port, const char* file_path) {
         SSL_free(ssl);
         close(sock);
         SSL_CTX_free(ctx);
-        return false;
+        return nullptr;
     }
-
-    // 5. Send file name length and name
-    std::string filename = file_path;
-    size_t pos = filename.find_last_of("/\\");
-    std::string just_name = (pos == std::string::npos) ? filename : filename.substr(pos + 1);
-    uint32_t name_len = htonl(just_name.size());
-    SSL_write(ssl, &name_len, sizeof(name_len));
-    SSL_write(ssl, just_name.c_str(), just_name.size());
-
-    // 6. Send file data
-    char buffer[4096];
-    while (file) {
-        file.read(buffer, sizeof(buffer));
-        std::streamsize bytes = file.gcount();
-        if (bytes > 0) {
-            SSL_write(ssl, buffer, bytes);
-        }
-    }
-
-    // 7. Clean up
-    SSL_shutdown(ssl);
-    SSL_free(ssl);
-    close(sock);
-    SSL_CTX_free(ctx);
-    file.close();
-    std::cout << "File sent!\n";
-    return true;
+    auto conn = new Connection{ssl, sock, ctx};
+    return conn;
 }
 
-int main() {
-    send_file_tls("127.0.0.1", 12345, "test.txt");
-    return 0;
+void close_connection(Connection* conn) {
+    if (!conn) return;
+
+    int shutdown_result;
+    do {
+        shutdown_result = SSL_shutdown(conn->ssl);
+        if (shutdown_result != 1 && shutdown_result != 0) {
+            std::cerr << "SSL shutdown failed\n";
+        }
+    } while (shutdown_result == 0);
+
+    SSL_free(conn->ssl);
+    close(conn->sock);
+    SSL_CTX_free(conn->ctx);
+    delete conn;
 }

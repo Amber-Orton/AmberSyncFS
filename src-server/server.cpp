@@ -20,15 +20,15 @@ int main() {
         std::cerr << "Failed to create SSL_CTX\n";
         return 1;
     }
-    if (SSL_CTX_use_certificate_file(ctx, "server.crt", SSL_FILETYPE_PEM) <= 0 ||
-        SSL_CTX_use_PrivateKey_file(ctx, "server.key", SSL_FILETYPE_PEM) <= 0) {
+    if (SSL_CTX_use_certificate_file(ctx, "certs/server.crt", SSL_FILETYPE_PEM) <= 0 ||
+        SSL_CTX_use_PrivateKey_file(ctx, "certs/server.key", SSL_FILETYPE_PEM) <= 0) {
         std::cerr << "Failed to load cert/key\n";
         SSL_CTX_free(ctx);
         return 1;
     }
 
     // Load CA or client certificate for client verification
-    if (SSL_CTX_load_verify_locations(ctx, "client.crt", nullptr) != 1) {
+    if (SSL_CTX_load_verify_locations(ctx, "certs/ca.crt", nullptr) != 1) {
         std::cerr << "Failed to load CA/client certificate for client verification\n";
         SSL_CTX_free(ctx);
         return 1;
@@ -48,8 +48,10 @@ int main() {
         sockaddr_in client_addr{};
         socklen_t client_len = sizeof(client_addr);
         int client_fd = accept(server_fd, (sockaddr*)&client_addr, &client_len);
-        if (client_fd < 0) continue;
-
+        if (client_fd < 0) {
+            std::cerr << "Failed to accept client connection\n";
+            continue;
+        }
 
         SSL* ssl = SSL_new(ctx);
         SSL_set_fd(ssl, client_fd);
@@ -70,35 +72,50 @@ int main() {
             continue;
         }
 
+
         uint32_t name_len = 0;
-        SSL_read(ssl, &name_len, sizeof(name_len));
+        int n1 = SSL_read(ssl, &name_len, sizeof(name_len));
+        std::cout << "[DEBUG] Read file name length: " << n1 << " bytes\n" << std::flush;
         name_len = ntohl(name_len);
         if (name_len == 0 || name_len > 256) {
+            std::cerr << "Invalid filename length: " << name_len << "\n" << std::flush;
             SSL_free(ssl);
             close(client_fd);
             continue;
         }
 
         char filename[257] = {0};
-        SSL_read(ssl, filename, name_len);
+        int n2 = SSL_read(ssl, filename, name_len);
         filename[name_len] = '\0';
+        std::cout << "[DEBUG] Read file name: '" << filename << "' (" << n2 << " bytes)\n" << std::flush;
 
         std::ofstream outfile(filename, std::ios::binary);
         if (!outfile) {
+            std::cerr << "Failed to open file for writing: " << filename << "\n" << std::flush;
             SSL_free(ssl);
             close(client_fd);
             continue;
         }
-
+        std::cout << "Receiving file: '" << filename << "'..." << std::endl << std::flush;
         char buffer[4096];
         int bytes;
+        size_t total_bytes = 0;
         while ((bytes = SSL_read(ssl, buffer, sizeof(buffer))) > 0) {
             outfile.write(buffer, bytes);
+            total_bytes += bytes;
         }
-        std::cout << "Received file: " << filename << std::endl;
+        std::cout << "Received file: '" << filename << "' (" << total_bytes << " bytes)" << std::endl << std::flush;
+        
+        outfile.flush();
         outfile.close();
 
-        SSL_shutdown(ssl);
+        int shutdown_result;
+        do {
+            shutdown_result = SSL_shutdown(ssl);
+            if (shutdown_result != 1 && shutdown_result != 0) {
+                std::cerr << "SSL shutdown failed\n";
+            }
+        } while (shutdown_result == 0);
         SSL_free(ssl);
         close(client_fd);
     }
