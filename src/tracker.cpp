@@ -1,24 +1,25 @@
-#ifndef TRACKER_H
-#define TRACKER_H
-
-
 #include <stdio.h>
 #include <sys/inotify.h>
 #include <unistd.h>
 #include <filesystem>
-
+#include "sync.h"
+#include <map>
+#include <string>
 
 
 #define EVENT_SIZE (sizeof(struct inotify_event))
 #define BUF_LEN (1024 * (EVENT_SIZE + 16))
 
-int track_directory(const char* path) {
-    int fd = inotify_init();
+void track_file(const std::filesystem::directory_entry& entry, int fd, std::map<int, std::string>& wd_to_path);
 
-    inotify_add_watch(fd, path, IN_MODIFY | IN_CREATE);
+void track_directory(const char* path) {
+    int fd = inotify_init();
+    std::map<int, std::string> wd_to_path;
+
+    track_file(std::filesystem::directory_entry(path), fd, wd_to_path);
     for (const auto& entry : std::filesystem::recursive_directory_iterator(path)) {
         if (entry.is_directory()) {
-            inotify_add_watch(fd, entry.path().c_str(), IN_MODIFY | IN_CREATE);
+            track_file(entry, fd, wd_to_path);
         }
     }
     	
@@ -30,14 +31,15 @@ int track_directory(const char* path) {
 			struct inotify_event *event = (struct inotify_event *)&buffer[i];
 
 			if (event->len) {
-				printf("Event on file: %s\n", event->name);
+                upload_file((wd_to_path[event->wd] + "/" + event->name).c_str());
 			}
 
 			i += EVENT_SIZE + event->len;
 		}
 	}
-    return 0;
 }
 
-
-#endif // TRACKER_H
+void track_file(const std::filesystem::directory_entry& entry, int fd, std::map<int, std::string>& wd_to_path) {
+    int wd = inotify_add_watch(fd, entry.path().c_str(), IN_MODIFY | IN_CREATE);
+    wd_to_path[wd] = entry.path().c_str();
+}
