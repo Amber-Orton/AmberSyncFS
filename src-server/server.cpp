@@ -7,6 +7,7 @@
 #include <cstring>
 #include <openssl/ssl.h>
 #include <openssl/err.h>
+#include "server.h"
 
 int main() {
     int port = 12345;
@@ -73,13 +74,31 @@ int main() {
         }
 
 
-        if(receive_file(ssl) < 0) {
-            std::cerr << "Failed to receive file\n";
+        // Read command from client
+        char command[2];
+        int bytes_read = SSL_read(ssl, command, sizeof(command)); // Read command type (e.g., "UP" for upload)
+        if (bytes_read <= 0) {
+            std::cerr << "Failed to read command from client\n";
             shutdown_ssl(ssl);
             SSL_free(ssl);
             close(client_fd);
             continue;
         }
+
+
+        // Handle command its the programmers responsibility to ensure that commands are all distinct and of a fixed length
+        if (std::strncmp(command, "UP", 2) == 0) {
+             std::cout << "Received upload command from client\n";
+            if(receive_file(ssl) < 0) {
+                std::cerr << "Failed to receive file\n";
+                shutdown_ssl(ssl);
+                SSL_free(ssl);
+                close(client_fd);
+                continue;
+            }
+        }
+
+
 
         shutdown_ssl(ssl);
         SSL_free(ssl);

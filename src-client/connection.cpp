@@ -28,6 +28,8 @@ bool send_file_tls(const char* server_ip, int port,const char* track_root, const
         return false;
     }
 
+    SSL_write(conn->ssl, "UP", 2); // Simple command to indicate upload
+
     // Send file name length and name
     std::string filename = relative_file_path; // Send relative path for server dir structure
     uint32_t name_len = htonl(filename.size());
@@ -47,7 +49,7 @@ bool send_file_tls(const char* server_ip, int port,const char* track_root, const
     // Ensure file is flushed and closed before shutting down SSL
     file.close();
 
-    close_connection(conn);
+    end_of_connection(conn);
     return true;
 }
 
@@ -80,7 +82,7 @@ Connection* open_connection(const char* server_ip, int port) {
         return nullptr;
     }
 
-    // 2. Create socket
+    // Create socket
     int sock = socket(AF_INET, SOCK_STREAM, 0);
     if (sock < 0) {
         std::cerr << "Socket creation failed\n";
@@ -100,7 +102,7 @@ Connection* open_connection(const char* server_ip, int port) {
         return nullptr;
     }
 
-    // 3. Wrap socket with SSL
+    // Wrap socket with SSL
     SSL* ssl = SSL_new(ctx);
     SSL_set_fd(ssl, sock);
 
@@ -126,7 +128,7 @@ Connection* open_connection(const char* server_ip, int port) {
     return conn;
 }
 
-void close_connection(Connection* conn) {
+void end_of_connection(Connection* conn) {
     if (!conn) return;
 
     shutdown_ssl(conn->ssl);
