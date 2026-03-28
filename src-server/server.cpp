@@ -27,6 +27,14 @@ int main() {
         return 1;
     }
 
+    // Load CA or client certificate for client verification
+    if (SSL_CTX_load_verify_locations(ctx, "client.crt", nullptr) != 1) {
+        std::cerr << "Failed to load CA/client certificate for client verification\n";
+        SSL_CTX_free(ctx);
+        return 1;
+    }
+    SSL_CTX_set_verify(ctx, SSL_VERIFY_PEER | SSL_VERIFY_FAIL_IF_NO_PEER_CERT, nullptr);
+
     int server_fd = socket(AF_INET, SOCK_STREAM, 0);
     sockaddr_in address{};
     address.sin_family = AF_INET;
@@ -42,10 +50,21 @@ int main() {
         int client_fd = accept(server_fd, (sockaddr*)&client_addr, &client_len);
         if (client_fd < 0) continue;
 
+
         SSL* ssl = SSL_new(ctx);
         SSL_set_fd(ssl, client_fd);
         if (SSL_accept(ssl) <= 0) {
             std::cerr << "SSL handshake failed\n";
+            SSL_free(ssl);
+            close(client_fd);
+            continue;
+        }
+
+        // Verify client certificate
+        long verify_result = SSL_get_verify_result(ssl);
+        if (verify_result != X509_V_OK) {
+            std::cerr << "Client certificate verification failed: " << X509_verify_cert_error_string(verify_result) << "\n";
+            SSL_shutdown(ssl);
             SSL_free(ssl);
             close(client_fd);
             continue;

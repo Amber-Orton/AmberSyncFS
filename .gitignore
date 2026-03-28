@@ -39,6 +39,13 @@
 *.out
 *.app
 
+# Certificate and key files (do not upload sensitive material)
+certs/
+*.crt
+*.key
+*.csr
+*.srl
+
 # Build directories
 build/
 Build/

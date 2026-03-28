@@ -19,9 +19,27 @@ bool send_file_tls(const char* server_ip, int port, const char* file_path) {
     SSL_library_init();
     SSL_load_error_strings();
     OpenSSL_add_all_algorithms();
+
     SSL_CTX* ctx = SSL_CTX_new(TLS_client_method());
     if (!ctx) {
         std::cerr << "Failed to create SSL_CTX\n";
+        return false;
+    }
+
+
+    // Load CA or server certificate for validation
+    if (SSL_CTX_load_verify_locations(ctx, "server.crt", nullptr) != 1) {
+        std::cerr << "Failed to load CA/server certificate for validation\n";
+        SSL_CTX_free(ctx);
+        return false;
+    }
+    SSL_CTX_set_verify(ctx, SSL_VERIFY_PEER, nullptr);
+
+    // Load client certificate and private key for mutual authentication
+    if (SSL_CTX_use_certificate_file(ctx, "client.crt", SSL_FILETYPE_PEM) <= 0 ||
+        SSL_CTX_use_PrivateKey_file(ctx, "client.key", SSL_FILETYPE_PEM) <= 0) {
+        std::cerr << "Failed to load client cert/key for mutual TLS\n";
+        SSL_CTX_free(ctx);
         return false;
     }
 
@@ -48,8 +66,20 @@ bool send_file_tls(const char* server_ip, int port, const char* file_path) {
     // 4. Wrap socket with SSL
     SSL* ssl = SSL_new(ctx);
     SSL_set_fd(ssl, sock);
+
     if (SSL_connect(ssl) <= 0) {
         std::cerr << "SSL handshake failed\n";
+        SSL_free(ssl);
+        close(sock);
+        SSL_CTX_free(ctx);
+        return false;
+    }
+
+    // Verify server certificate
+    long verify_result = SSL_get_verify_result(ssl);
+    if (verify_result != X509_V_OK) {
+        std::cerr << "Server certificate verification failed: " << X509_verify_cert_error_string(verify_result) << "\n";
+        SSL_shutdown(ssl);
         SSL_free(ssl);
         close(sock);
         SSL_CTX_free(ctx);
