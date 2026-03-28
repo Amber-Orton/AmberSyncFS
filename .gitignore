@@ -79,5 +79,9 @@ server
 client
 ambersyncfs
 
+# IDE and editor files
+.vscode/
+.idea/
+
 # Ambers testing output files
 tests/
