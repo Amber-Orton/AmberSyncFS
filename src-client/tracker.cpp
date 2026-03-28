@@ -33,13 +33,13 @@ void start_tracking_directory(const char* track_root) {
             if (event->len) {
                 std::string relative_path = wd_to_path[event->wd] + "/" + event->name;
                     bool is_dir = event->mask & IN_ISDIR;
-                    if (event->mask & IN_MODIFY || event->mask & IN_CREATE) {
+                    if (event->mask & IN_MODIFY || event->mask & IN_CREATE || event->mask & IN_MOVED_TO) {
                         if (is_dir)
                             upload_directory(track_root, relative_path.c_str());
                         else
                             upload_file(track_root, relative_path.c_str());
                     }
-                    if (event->mask & IN_DELETE || event->mask & IN_DELETE_SELF) {
+                    if (event->mask & IN_DELETE || event->mask & IN_DELETE_SELF || event->mask & IN_MOVED_FROM) {
                         if (is_dir)
                             delete_directory(track_root, relative_path.c_str());
                         else
@@ -51,7 +51,7 @@ void start_tracking_directory(const char* track_root) {
                         else
                             opened_file(track_root, relative_path.c_str());
                     }
-                    unsigned known = IN_MODIFY | IN_CREATE | IN_DELETE | IN_ACCESS | IN_OPEN | IN_DELETE_SELF | IN_ISDIR;
+                    unsigned known = IN_MODIFY | IN_CREATE | IN_DELETE | IN_ACCESS | IN_OPEN | IN_DELETE_SELF | IN_ISDIR | IN_MOVED_FROM | IN_MOVED_TO;
                     if ((event->mask & ~known) != 0) {
                         printf("Unknown/other event: %u\n", event->mask);
                     }
@@ -63,7 +63,7 @@ void start_tracking_directory(const char* track_root) {
 }
 
 void track_file_or_directory(const char* track_root, const std::filesystem::directory_entry& entry, int fd, std::map<int, std::string>& wd_to_path) {
-    int wd = inotify_add_watch(fd, entry.path().c_str(), IN_MODIFY | IN_CREATE | IN_DELETE | IN_ACCESS | IN_OPEN | IN_DELETE_SELF);
+    int wd = inotify_add_watch(fd, entry.path().c_str(), IN_MODIFY | IN_CREATE | IN_DELETE | IN_ACCESS | IN_OPEN | IN_DELETE_SELF | IN_MOVED_FROM | IN_MOVED_TO);
     std::string relative_path = std::filesystem::relative(entry.path(), track_root).string();
     wd_to_path[wd] = relative_path;
 }
