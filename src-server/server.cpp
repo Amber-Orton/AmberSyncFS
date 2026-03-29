@@ -11,21 +11,24 @@
 #include <filesystem>
 
 int main(int argc, char *argv[]) {
-	if (argc != 2) {
-		fprintf(stderr, "Usage: %s <directory>\n", argv[0]);
+	if (argc != 3) {
+		fprintf(stderr, "Usage: %s <port> <directory>\n", argv[0]);
 		return 1;
 	}
 
-    // collect the directory to be synced to
+    // collect the port and directory to be synced to
+    // and check that they exist and are valid
+    port = std::stoi(argv[1]);
+    if (port <= 0 || port > 65535) {
+        std::cerr << "Invalid port number: " << port << "\n";
+        return 1;
+    }
     // and check that it exists and is a directory
-    const char* directory = argv[1];
+    const char* directory = argv[2];
     if (!std::filesystem::exists(directory) || !std::filesystem::is_directory(directory)) {
         std::cerr << "Provided path is not a valid directory: " << directory << "\n";
         return 1;
     }
-
-
-    int port = 12345;
 
     // 1. Initialize OpenSSL
     SSL_library_init();

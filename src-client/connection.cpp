@@ -8,11 +8,12 @@
 #include <openssl/err.h>
 #include <ostream>
 #include "connection.h"
+#include "main.h"
 
 
 using Connection = struct connection;
 
-bool send_file_tls(const char* server_ip, int port,const char* track_root, const char* relative_file_path) {
+bool send_file_tls(const char* relative_file_path) {
     // Open file
     std::string file_path = std::string(track_root) + "/" + relative_file_path;
     std::ifstream file(file_path, std::ios::binary);
@@ -22,7 +23,7 @@ bool send_file_tls(const char* server_ip, int port,const char* track_root, const
     }
 
     // Establish TLS connection
-    Connection* conn = open_connection(server_ip, port);
+    Connection* conn = establish_connection(server_ip, server_port);
     if (!conn) {
         std::cerr << "Failed to open TLS connection\n";
         return false;
@@ -53,7 +54,7 @@ bool send_file_tls(const char* server_ip, int port,const char* track_root, const
     return true;
 }
 
-Connection* open_connection(const char* server_ip, int port) {
+Connection* establish_connection(const char* server_ip, int port) {
     // Initialize OpenSSL
     SSL_library_init();
     SSL_load_error_strings();
@@ -129,6 +130,10 @@ Connection* open_connection(const char* server_ip, int port) {
 }
 
 void end_of_connection(Connection* conn) {
+    close_connection(conn);
+}
+
+void close_connection(Connection* conn) {
     if (!conn) return;
 
     shutdown_ssl(conn->ssl);
@@ -138,6 +143,7 @@ void end_of_connection(Connection* conn) {
     SSL_CTX_free(conn->ctx);
     delete conn;
 }
+    
 
 void shutdown_ssl(SSL* ssl) {
     int shutdown_result;

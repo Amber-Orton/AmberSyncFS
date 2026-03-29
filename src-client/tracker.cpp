@@ -6,13 +6,14 @@
 #include <map>
 #include <string>
 #include "tracker.h"
+#include "main.h"
 
 
 #define EVENT_SIZE (sizeof(struct inotify_event))
 #define BUF_LEN (1024 * (EVENT_SIZE + 16))
 
 
-void start_tracking_directory(const char* track_root) {
+void start_tracking() {
     int fd = inotify_init();
     std::map<int, std::string> wd_to_path;
 
@@ -32,29 +33,29 @@ void start_tracking_directory(const char* track_root) {
 
             if (event->len) {
                 std::string relative_path = wd_to_path[event->wd] + "/" + event->name;
-                    bool is_dir = event->mask & IN_ISDIR;
-                    if (event->mask & IN_MODIFY || event->mask & IN_CREATE || event->mask & IN_MOVED_TO) {
-                        if (is_dir)
-                            upload_directory(track_root, relative_path.c_str());
-                        else
-                            upload_file(track_root, relative_path.c_str());
-                    }
-                    if (event->mask & IN_DELETE || event->mask & IN_DELETE_SELF || event->mask & IN_MOVED_FROM) {
-                        if (is_dir)
-                            delete_directory(track_root, relative_path.c_str());
-                        else
-                            delete_file(track_root, relative_path.c_str());
-                    }
-                    if (event->mask & IN_ACCESS || event->mask & IN_OPEN) {
-                        if (is_dir)
-                            opened_directory(track_root, relative_path.c_str());
-                        else
-                            opened_file(track_root, relative_path.c_str());
-                    }
-                    unsigned known = IN_MODIFY | IN_CREATE | IN_DELETE | IN_ACCESS | IN_OPEN | IN_DELETE_SELF | IN_ISDIR | IN_MOVED_FROM | IN_MOVED_TO;
-                    if ((event->mask & ~known) != 0) {
-                        printf("Unknown/other event: %u\n", event->mask);
-                    }
+                bool is_dir = event->mask & IN_ISDIR;
+                if (event->mask & IN_MODIFY || event->mask & IN_CREATE || event->mask & IN_MOVED_TO) {
+                    if (is_dir)
+                        upload_directory(relative_path.c_str());
+                    else
+                        upload_file(relative_path.c_str());
+                }
+                if (event->mask & IN_DELETE || event->mask & IN_DELETE_SELF || event->mask & IN_MOVED_FROM) {
+                    if (is_dir)
+                        delete_directory(relative_path.c_str());
+                    else
+                        delete_file(relative_path.c_str());
+                }
+                if (event->mask & IN_ACCESS || event->mask & IN_OPEN) {
+                    if (is_dir)
+                        opened_directory(relative_path.c_str());
+                    else
+                        opened_file(relative_path.c_str());
+                }
+                unsigned known = IN_MODIFY | IN_CREATE | IN_DELETE | IN_ACCESS | IN_OPEN | IN_DELETE_SELF | IN_ISDIR | IN_MOVED_FROM | IN_MOVED_TO;
+                if ((event->mask & ~known) != 0) {
+                    printf("Unknown/other event: %u\n", event->mask);
+                }
             }
 
             i += EVENT_SIZE + event->len;

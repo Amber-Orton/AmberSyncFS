@@ -4,6 +4,8 @@
 
 #include <openssl/ssl.h>
 
+static int port;
+
 void shutdown_ssl(SSL* ssl);
 int receive_file(SSL* ssl, const char* directory);
 
