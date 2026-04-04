@@ -8,7 +8,7 @@
 #include <unistd.h>
 
 void upload_file(const char* relative_path) {
-    printf("Uploading file: %s\n", relative_path);
+    printf("creating upload event file: %s\n", relative_path);
     
     unsigned long event_num = event_counter.fetch_add(1, std::memory_order_relaxed);
     if (create_event_file("UPLOAD", relative_path, event_num) < 0) {
@@ -57,7 +57,9 @@ int create_event_file(const char* event_type, const char* relative_path, unsigne
         return -1;
     }
     fprintf(event_file, "%s\n%s\n", event_type, relative_path);
+    fflush(event_file);
     fsync(fd);
+    fclose(event_file);
 
     char final_filename[64];
     snprintf(final_filename, sizeof(final_filename), "%s/ready/event_%lu", event_dir, event_num);

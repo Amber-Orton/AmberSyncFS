@@ -1,9 +1,11 @@
 #include "tracker.h"
 #include <cstdio>
 #include "main.h"
+#include "sync_event_handler.h"
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <errno.h>
+#include <pthread.h>
 
 
 
@@ -40,6 +42,10 @@ int main(int argc, char *argv[]) {
 	snprintf(buf, sizeof(buf), "%s/ready", event_dir);
 	ensure_dir(buf);
 
-	start_tracking();
+	pthread_t tracker_thread, event_handler_thread;
+	pthread_create(&tracker_thread, nullptr, (void* (*)(void*))start_tracking, nullptr);
+	pthread_create(&event_handler_thread, nullptr, (void* (*)(void*))handle_events, nullptr);
+	pthread_join(tracker_thread, nullptr);
+	pthread_join(event_handler_thread, nullptr);
 	return 0;
 }
