@@ -2,11 +2,12 @@
 #include <sys/inotify.h>
 #include <unistd.h>
 #include <filesystem>
-#include "sync.h"
+#include "sync_event_creator.h"
 #include <map>
 #include <string>
 #include "tracker.h"
 #include "main.h"
+#include <iostream>
 
 
 #define EVENT_SIZE (sizeof(struct inotify_event))
@@ -16,6 +17,16 @@
 void start_tracking() {
     int fd = inotify_init();
     std::map<int, std::string> wd_to_path;
+
+    if (fd < 0) {
+        perror("inotify_init");
+        return;
+    }
+    if (!track_root) {
+        std::cerr << "Tracking root directory is not set\n";
+        close(fd);
+        return;
+    }
 
     track_file_or_directory(track_root, std::filesystem::directory_entry(track_root), fd, wd_to_path);
     for (const auto& entry : std::filesystem::recursive_directory_iterator(track_root)) {

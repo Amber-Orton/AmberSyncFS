@@ -9,4 +9,6 @@ void upload_directory(const char* relative_path);
 void delete_directory(const char* relative_path);
 void opened_directory(const char* relative_path);
 
+int create_event_file(const char* event_type, const char* relative_path, unsigned long event_num);
+
 #endif // SYNC_H
