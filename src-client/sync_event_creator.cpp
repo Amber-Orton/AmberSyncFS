@@ -9,11 +9,19 @@
 #include <unistd.h>
 
 int create_priority_event_file(const std::string& event_type, const std::string& relative_path) {
-    return create_event_file_checked(event_type, "priority", relative_path);
+    int result = create_event_file_checked(event_type, "priority", relative_path);
+    if (result == 1) {
+        std::cout << "Event creation skipped by timer set check for event type: " << event_type << ", relative path: " << relative_path << "\n";
+    }
+    return result;
 }
 
 int create_non_priority_event_file(const std::string& event_type, const std::string& relative_path) {
-    return create_event_file_checked(event_type, "non_priority", relative_path);
+    int result = create_event_file_checked(event_type, "non_priority", relative_path);
+    if (result == 1) {
+        std::cout << "Event creation skipped by timer set check for event type: " << event_type << ", relative path: " << relative_path << "\n";
+    }
+    return result;
 }
 
 void upload_file(const std::string& relative_path) {
@@ -34,15 +42,6 @@ void delete_file(const std::string& relative_path) {
     }
 }
 
-void opened_file(const std::string& relative_path) {
-    printf("creating opened event file: %s\n", relative_path.c_str());
-    
-    if (create_priority_event_file("OPENED_FILE", relative_path) < 0) {
-        std::cerr << "Failed to create opened event file\n";
-        return;
-    }
-}
-
 void upload_directory(const std::string& relative_path) {
     printf("creating upload directory event file: %s\n", relative_path.c_str());
     
@@ -57,15 +56,6 @@ void delete_directory(const std::string& relative_path) {
     
     if (create_non_priority_event_file("DELETE_DIR", relative_path) < 0) {
         std::cerr << "Failed to create delete directory event file\n";
-        return;
-    }
-}
-
-void opened_directory(const std::string& relative_path) {
-    printf("creating opened directory event file: %s\n", relative_path.c_str());
-    
-    if (create_priority_event_file("OPENED_DIR", relative_path) < 0) {
-        std::cerr << "Failed to create opened directory event file\n";
         return;
     }
 }
@@ -97,8 +87,8 @@ int create_event_file(const std::string& event_type, const std::string& event_ty
 }
 
 int create_event_file_checked(const std::string& event_type, const std::string& event_type_folder, const std::string& relative_path) {
-    if (timer_set_instance.check(event_type, event_type_folder, relative_path) == 0) {
-        return -1;
+    if (timer_set_instance.check(event_type, event_type_folder, relative_path) == 1) {
+        return 1; // Event creation not needed based on timer set check
     }
     return create_event_file(event_type, event_type_folder, relative_path);
 }

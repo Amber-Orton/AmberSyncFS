@@ -41,12 +41,13 @@ int main(int argc, char *argv[]) {
 	ensure_dir(event_dir + "/ready");
 	ensure_dir(event_dir + "/ready/priority");
 	ensure_dir(event_dir + "/ready/non_priority");
+	ensure_dir(event_dir + "/processing");
 
 
 	//create and run threads
 	std::thread tracker_thread(start_tracking);
-	std::thread non_priority_event_handler_thread(handle_events, std::string("non_priority"));
-	std::thread priority_event_handler_thread(handle_events, std::string("priority"));
+	std::thread non_priority_event_handler_thread(handle_non_priority_events);
+	std::thread priority_event_handler_thread(handle_priority_events);
 	tracker_thread.join();
 	non_priority_event_handler_thread.join();
 	priority_event_handler_thread.join();

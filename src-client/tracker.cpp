@@ -57,13 +57,7 @@ void start_tracking() {
                     else
                         delete_file(relative_path);
                 }
-                if (event->mask & IN_ACCESS || event->mask & IN_OPEN) {
-                    if (is_dir)
-                        opened_directory(relative_path);
-                    else
-                        opened_file(relative_path);
-                }
-                unsigned known = IN_MODIFY | IN_CREATE | IN_DELETE | IN_ACCESS | IN_OPEN | IN_DELETE_SELF | IN_ISDIR | IN_MOVED_FROM | IN_MOVED_TO;
+                unsigned known = IN_MODIFY | IN_CREATE | IN_DELETE | IN_DELETE_SELF | IN_ISDIR | IN_MOVED_FROM | IN_MOVED_TO;
                 if ((event->mask & ~known) != 0) {
                     printf("Unknown/other event: %u\n", event->mask);
                 }
@@ -75,7 +69,7 @@ void start_tracking() {
 }
 
 void track_file_or_directory(const std::string& track_root, const std::filesystem::directory_entry& entry, int fd, std::map<int, std::string>& wd_to_path) {
-    int wd = inotify_add_watch(fd, entry.path().c_str(), IN_MODIFY | IN_CREATE | IN_DELETE | IN_ACCESS | IN_OPEN | IN_DELETE_SELF | IN_MOVED_FROM | IN_MOVED_TO);
+    int wd = inotify_add_watch(fd, entry.path().c_str(), IN_MODIFY | IN_CREATE | IN_DELETE | IN_DELETE_SELF | IN_MOVED_FROM | IN_MOVED_TO);
     std::string relative_path = std::filesystem::relative(entry.path(), track_root).string();
     wd_to_path[wd] = relative_path;
 }
