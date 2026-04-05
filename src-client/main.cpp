@@ -7,6 +7,11 @@
 #include <errno.h>
 #include <thread>
 #include <cstdlib>
+#include "sync_event_handler.h"
+#include <vector>
+#include <iostream>
+#include <dirent.h>
+#include <cstring>
 
 
 
@@ -34,22 +39,48 @@ int main(int argc, char *argv[]) {
 	server_ip = argv[2];
 	server_port = std::stoi(argv[3]);
 	track_root = argv[4];
-
+	
 	// Ensure event directories exist
 	ensure_dir(event_dir);
 	ensure_dir(event_dir + "/in_creation");
 	ensure_dir(event_dir + "/ready");
-	ensure_dir(event_dir + "/ready/priority");
-	ensure_dir(event_dir + "/ready/non_priority");
 	ensure_dir(event_dir + "/processing");
 
+	// move all non finished events back to ready on startup
+	DIR* dir = opendir((event_dir + "/processing").c_str());
+	if (dir) {
+		struct dirent* entry;
+		while ((entry = readdir(dir)) != nullptr) {
+			if (strcmp(entry->d_name, ".") && strcmp(entry->d_name, "..")) {
+				std::string processing_file_path = event_dir + "/processing/" + entry->d_name;
+				std::string ready_file_path = event_dir + "/ready/" + entry->d_name;
+				if (rename(processing_file_path.c_str(), ready_file_path.c_str()) != 0) {
+					std::cerr << "Failed to move event file from processing to ready on startup: " << processing_file_path << "\n";
+				}
+			}
+		}
+		closedir(dir);
+	} else {
+		std::cerr << "Failed to open processing event directory on startup: " << (event_dir + "/processing").c_str() << "\n";
+	}
 
-	//create and run threads
+	
+	// Initialize the event semaphore with the number of hardware threads (or 4 if unknown)
+	auto num_threads = std::thread::hardware_concurrency();
+	if (num_threads == 0) {
+		num_threads = 4; // Default to 4 if hardware_concurrency can't determine
+	}
+
+	
+	//create and run handler_threads
 	std::thread tracker_thread(start_tracking);
-	std::thread non_priority_event_handler_thread(handle_non_priority_events);
-	std::thread priority_event_handler_thread(handle_priority_events);
+	auto handler_threads = std::vector<std::thread>{};
+	for (unsigned int i = 0; i < num_threads; ++i) {
+		handler_threads.emplace_back(handle_events);
+	}
 	tracker_thread.join();
-	non_priority_event_handler_thread.join();
-	priority_event_handler_thread.join();
+	for (auto& t : handler_threads) {
+		t.join();
+	}
 	return 0;
 }

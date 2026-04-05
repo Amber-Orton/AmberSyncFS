@@ -9,9 +9,19 @@
 #include <ostream>
 #include "connection.h"
 #include "main.h"
+#include <chrono>
+#include <mutex>
+#include <algorithm>
+#include <thread>
 
 
 using Connection = struct connection;
+
+std::atomic<bool> is_connected{false};
+std::atomic<bool> connection_try_in_progress{false};
+auto connection_retry_timeout = std::chrono::seconds(1);
+auto last_connection_attempt_time = std::chrono::steady_clock::now() - std::chrono::seconds(10);
+const auto max_retry_timeout = std::chrono::seconds(60);
 
 bool send_file_tls(const std::string& relative_file_path) {
     // Open file
@@ -23,7 +33,7 @@ bool send_file_tls(const std::string& relative_file_path) {
     }
 
     // Establish TLS connection
-    Connection* conn = establish_connection(server_ip, server_port);
+    Connection* conn = try_establish_connection(server_ip, server_port);
     if (!conn) {
         std::cerr << "Failed to open TLS connection\n";
         return false;
@@ -56,7 +66,7 @@ bool send_file_tls(const std::string& relative_file_path) {
 
 bool delete_file_tls(const std::string& relative_file_path) {
     // Establish TLS connection
-    Connection* conn = establish_connection(server_ip, server_port);
+    Connection* conn = try_establish_connection(server_ip, server_port);
     if (!conn) {
         std::cerr << "Failed to open TLS connection\n";
         return false;
@@ -74,6 +84,44 @@ bool delete_file_tls(const std::string& relative_file_path) {
     return true;
 }
 
+
+Connection* try_establish_connection(const std::string& server_ip, int port) {
+    while (true) {
+        if (is_connected.load()) {
+            auto conn = establish_connection(server_ip, port);
+            if (conn != nullptr) {
+                return conn;
+            } else {
+                is_connected.store(false);
+            }
+        }
+        auto time_since_last_attempt = std::chrono::steady_clock::now() - last_connection_attempt_time;
+        if (time_since_last_attempt < connection_retry_timeout) {
+            std::cout << "Waiting before next connection attempt for " << (connection_retry_timeout - time_since_last_attempt).count() / 1000000000 << " s\n";
+            std::this_thread::sleep_for((connection_retry_timeout - time_since_last_attempt) * (1 + rand() % 5)); // *1.1 so one thread leaves before rest, this does not need to be strict
+        }
+        if (connection_try_in_progress.exchange(true)) { // other thread is trying to connect
+            std::this_thread::sleep_for(std::chrono::milliseconds(100 * (1 + rand() % 5)));
+            continue; // check connection status again after waiting, if other thread succeeded we can just return, otherwise we will try to connect ourselves
+        }
+        if (is_connected.load()) {
+            connection_try_in_progress.store(false);
+            continue; // another thread established connection while we were waiting or processing.
+        }
+        auto conn = establish_connection(server_ip, port);
+        if (conn != nullptr) {
+            is_connected.store(true);
+            connection_retry_timeout = std::chrono::seconds(1); // reset retry timeout after successful connection
+            last_connection_attempt_time = std::chrono::steady_clock::now();
+            connection_try_in_progress.store(false);
+            return conn;
+        } else {
+            connection_retry_timeout = std::min(connection_retry_timeout * 2, max_retry_timeout);
+            last_connection_attempt_time = std::chrono::steady_clock::now();
+            connection_try_in_progress.store(false);
+        }
+    }
+}
 
 
 Connection* establish_connection(const std::string& server_ip, int port) {

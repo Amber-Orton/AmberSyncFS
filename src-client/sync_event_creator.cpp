@@ -8,26 +8,11 @@
 #include <iostream>
 #include <unistd.h>
 
-int create_priority_event_file(const std::string& event_type, const std::string& relative_path) {
-    int result = create_event_file_checked(event_type, "priority", relative_path);
-    if (result == 1) {
-        std::cout << "Event creation skipped by timer set check for event type: " << event_type << ", relative path: " << relative_path << "\n";
-    }
-    return result;
-}
-
-int create_non_priority_event_file(const std::string& event_type, const std::string& relative_path) {
-    int result = create_event_file_checked(event_type, "non_priority", relative_path);
-    if (result == 1) {
-        std::cout << "Event creation skipped by timer set check for event type: " << event_type << ", relative path: " << relative_path << "\n";
-    }
-    return result;
-}
 
 void upload_file(const std::string& relative_path) {
     printf("creating upload event file: %s\n", relative_path.c_str());
     
-    if (create_non_priority_event_file("UPLOAD_FILE", relative_path) < 0) {
+    if (create_event_file_checked("UPLOAD_FILE", relative_path) < 0) {
         std::cerr << "Failed to create upload event file\n";
         return;
     }
@@ -36,7 +21,7 @@ void upload_file(const std::string& relative_path) {
 void delete_file(const std::string& relative_path) {
     printf("creating delete event file: %s\n", relative_path.c_str());
     
-    if (create_non_priority_event_file("DELETE_FILE", relative_path) < 0) {
+    if (create_event_file_checked("DELETE_FILE", relative_path) < 0) {
         std::cerr << "Failed to create delete event file\n";
         return;
     }
@@ -45,7 +30,7 @@ void delete_file(const std::string& relative_path) {
 void upload_directory(const std::string& relative_path) {
     printf("creating upload directory event file: %s\n", relative_path.c_str());
     
-    if (create_non_priority_event_file("UPLOAD_DIR", relative_path) < 0) {
+    if (create_event_file_checked("UPLOAD_DIR", relative_path) < 0) {
         std::cerr << "Failed to create upload directory event file\n";
         return;
     }
@@ -54,13 +39,13 @@ void upload_directory(const std::string& relative_path) {
 void delete_directory(const std::string& relative_path) {
     printf("creating delete directory event file: %s\n", relative_path.c_str());
     
-    if (create_non_priority_event_file("DELETE_DIR", relative_path) < 0) {
+    if (create_event_file_checked("DELETE_DIR", relative_path) < 0) {
         std::cerr << "Failed to create delete directory event file\n";
         return;
     }
 }
 
-int create_event_file(const std::string& event_type, const std::string& event_type_folder, const std::string& relative_path) {
+int create_event_file(const std::string& event_type, const std::string& relative_path) {
     unsigned long event_num = event_counter.fetch_add(1, std::memory_order_relaxed);
     char filename_template[512];
     snprintf(filename_template, sizeof(filename_template), "%s/in_creation/event_XXXXXX", event_dir.c_str());
@@ -81,14 +66,15 @@ int create_event_file(const std::string& event_type, const std::string& event_ty
     fclose(event_file);
     
     char final_filename[512];
-    snprintf(final_filename, sizeof(final_filename), "%s/ready/%s/event_%lu", event_dir.c_str(), event_type_folder.c_str(), event_num);
+    snprintf(final_filename, sizeof(final_filename), "%s/ready/event_%lu", event_dir.c_str(), event_num);
     rename(filename_template, final_filename);
     return 0;
 }
 
-int create_event_file_checked(const std::string& event_type, const std::string& event_type_folder, const std::string& relative_path) {
-    if (timer_set_instance.check(event_type, event_type_folder, relative_path) == 1) {
+int create_event_file_checked(const std::string& event_type, const std::string& relative_path) {
+    if (timer_set_instance.check(event_type, relative_path) == 1) {
+        std::cout << "Event creation skipped by timer set check for event type: " << event_type << ", relative path: " << relative_path << "\n";
         return 1; // Event creation not needed based on timer set check
     }
-    return create_event_file(event_type, event_type_folder, relative_path);
+    return create_event_file(event_type, relative_path);
 }

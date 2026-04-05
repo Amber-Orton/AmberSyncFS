@@ -2,7 +2,7 @@
 CXX = g++
 
 # Flags
-CXXFLAGS = -Wall -Wextra -Wpedantic -O2 -std=c++17
+CXXFLAGS = -Wall -Wextra -Wpedantic -O2 -std=c++20
 
 
 # Directories

@@ -9,12 +9,12 @@ std::atomic<bool> timer_set::cleanup_thread_running{false};
 
 // Checks if an element is in the set and adds it if it's not.
 // Returns 1 if present and refreshed, 0 if missing or eligible for event creation.
-int timer_set::check(const std::string& event_type, const std::string& event_priority, const std::string& relative_path) {
+int timer_set::check(const std::string& event_type, const std::string& relative_path) {
     pthread_t cleanup_thread;
     pthread_create(&cleanup_thread, nullptr, &timer_set::cleanup_thread_func, this);
     pthread_detach(cleanup_thread);
 
-    std::string key = event_type + " " + event_priority + " " + relative_path;
+    std::string key = event_type + " " + relative_path;
     auto item = myset.find(key);
     if (item != myset.end()) {
         auto now = std::chrono::steady_clock::now();
@@ -42,27 +42,21 @@ void timer_set::cleanup() {
             item = myset.erase(item);
 
             if (should_create_event) {
-                auto first_split_pos = event_key.find(' ');
-                if (first_split_pos == std::string::npos || first_split_pos + 1 >= event_key.size()) {
+                auto split_pos = event_key.find(' ');
+                if (split_pos == std::string::npos || split_pos + 1 >= event_key.size()) {
                     std::cerr << "Invalid event key format: " << event_key << "\n";
                     continue;
                 }
 
-                auto second_split_pos = event_key.find(' ', first_split_pos + 1);
-                if (second_split_pos == std::string::npos || second_split_pos + 1 >= event_key.size()) {
+
+                auto event_type = event_key.substr(0, split_pos);
+                auto relative_path = event_key.substr(split_pos + 1);
+                if (event_type.empty() || relative_path.empty()) {
                     std::cerr << "Invalid event key format: " << event_key << "\n";
                     continue;
                 }
 
-                auto event_type = event_key.substr(0, first_split_pos);
-                auto event_priority = event_key.substr(first_split_pos + 1, second_split_pos - first_split_pos - 1);
-                auto relative_path = event_key.substr(second_split_pos + 1);
-                if (event_type.empty() || event_priority.empty() || relative_path.empty()) {
-                    std::cerr << "Invalid event key format: " << event_key << "\n";
-                    continue;
-                }
-
-                create_event_file(event_type, event_priority, relative_path);
+                create_event_file(event_type, relative_path);
             }
         } else {
             ++item;
