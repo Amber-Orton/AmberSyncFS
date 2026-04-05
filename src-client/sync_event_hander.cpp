@@ -21,7 +21,6 @@ void handle_events() {
             struct dirent* entry;
             while ((entry = readdir(dir)) != nullptr) {
                 if (strcmp(entry->d_name, ".") && strcmp(entry->d_name, "..")) {
-                    printf("Found event file: %s\n", entry->d_name);
                     std::string event_file_path = ready_event_dir + "/" + entry->d_name;
                     
                     // Move the event file to processing directory to indicate it's being processed
@@ -29,13 +28,17 @@ void handle_events() {
                     if (rename(event_file_path.c_str(), processing_file_path.c_str()) != 0) {
                         continue; // If we fail to move the file, skip processing it to avoid conflicts with other threads
                     }
+                    printf("Found and processing event file: %s\n", entry->d_name);
 
-                    if (process_event_file(processing_file_path)) {
-                        remove(event_file_path.c_str());
+                    if (process_event_file(processing_file_path) >= 0) {
+                        remove(processing_file_path.c_str());
                     } else {
-                        std::cerr << "Failed to process event file moving back to ready: " << event_file_path << "\n";
+                        printf("Failed to process event file moving back to ready: %s\n", event_file_path.c_str());
                         // Move the event file back to the ready directory to retry later
-                        rename(event_file_path.c_str(), ready_event_dir.c_str());
+                        if (rename(processing_file_path.c_str(), event_file_path.c_str()) != 0) {
+                            printf("Failed to move event file back to ready: %s\npelase run a resync\n", processing_file_path.c_str());
+                            remove(processing_file_path.c_str()); // If we fail to move it back, delete it to avoid blocking other events. This may cause missed events but is better than blocking.
+                        }
                     }
                     // close and delete the event file
                 }
@@ -51,9 +54,9 @@ void handle_events() {
     }
 }
 
-bool process_event_file(std::string event_file_path) {
+int process_event_file(std::string event_file_path) {
     FILE* f = fopen(event_file_path.c_str(), "r");
-    bool sucess = false;
+    int sucess = -1;
     if (f) {
         char buf[256];
         fgets(buf, sizeof(buf), f);
@@ -68,6 +71,18 @@ bool process_event_file(std::string event_file_path) {
                 buf[strcspn(buf, "\n")] = 0; // Remove newline
                 printf("Handling delete event for file: %s\n", buf);
                 sucess = delete_file_tls(buf);
+            }
+        } else if (strcmp(buf, "UPLOAD_DIR\n") == 0) {
+            if (fgets(buf, sizeof(buf), f)) {
+                buf[strcspn(buf, "\n")] = 0; // Remove newline
+                printf("Handling upload event for directory: %s\n", buf);
+                sucess = send_directory_tls(buf);
+            }
+        } else if (strcmp(buf, "DELETE_DIR\n") == 0) {
+            if (fgets(buf, sizeof(buf), f)) {
+                buf[strcspn(buf, "\n")] = 0; // Remove newline
+                printf("Handling delete event for directory: %s\n", buf);
+                sucess = delete_directory_tls(buf);
             }
         } else {
             printf("Unknown event type in file %s: %s\n", event_file_path.c_str(), buf);

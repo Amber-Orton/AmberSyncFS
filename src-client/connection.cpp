@@ -23,23 +23,23 @@ auto connection_retry_timeout = std::chrono::seconds(1);
 auto last_connection_attempt_time = std::chrono::steady_clock::now() - std::chrono::seconds(10);
 const auto max_retry_timeout = std::chrono::seconds(60);
 
-bool send_file_tls(const std::string& relative_file_path) {
+int send_file_tls(const std::string& relative_file_path) {
     // Open file
     std::string file_path = track_root + "/" + relative_file_path;
     std::ifstream file(file_path, std::ios::binary);
     if (!file) {
         std::cerr << "Failed to open file\n";
-        return false;
+        return 1; // return 1 to indicate failure but do not retry as this is likely an issue with the file itself and not the connection
     }
 
     // Establish TLS connection
     Connection* conn = try_establish_connection(server_ip, server_port);
     if (!conn) {
         std::cerr << "Failed to open TLS connection\n";
-        return false;
+        return -1;
     }
 
-    SSL_write(conn->ssl, "UP", 2); // Simple command to indicate upload
+    SSL_write(conn->ssl, "UF", 2); // Simple command to indicate upload
 
     // Send file name length and name
     std::string filename = relative_file_path; // Send relative path for server dir structure
@@ -61,18 +61,18 @@ bool send_file_tls(const std::string& relative_file_path) {
     file.close();
 
     end_of_connection(conn);
-    return true;
+    return 0;
 }
 
-bool delete_file_tls(const std::string& relative_file_path) {
+int delete_file_tls(const std::string& relative_file_path) {
     // Establish TLS connection
     Connection* conn = try_establish_connection(server_ip, server_port);
     if (!conn) {
         std::cerr << "Failed to open TLS connection\n";
-        return false;
+        return -1;
     }
 
-    SSL_write(conn->ssl, "DL", 2); // Simple command to indicate delete
+    SSL_write(conn->ssl, "DF", 2); // Simple command to indicate delete
     
     // Send file name length and name
     std::string filename = relative_file_path; // Send relative path for server dir structure
@@ -81,7 +81,47 @@ bool delete_file_tls(const std::string& relative_file_path) {
     SSL_write(conn->ssl, filename.c_str(), filename.size());
 
     end_of_connection(conn);
-    return true;
+    return 0;
+}
+
+int send_directory_tls(const std::string& relative_directory_path) {
+    // Establish TLS connection
+    Connection* conn = try_establish_connection(server_ip, server_port);
+    if (!conn) {
+        std::cerr << "Failed to open TLS connection\n";
+        return -1;
+    }
+
+    SSL_write(conn->ssl, "UD", 2); // Simple command to indicate upload directory
+    
+    // Send directory name length and name
+    std::string dirname = relative_directory_path; // Send relative path for server dir structure
+    uint32_t name_len = htonl(dirname.size());
+    SSL_write(conn->ssl, &name_len, sizeof(name_len));
+    SSL_write(conn->ssl, dirname.c_str(), dirname.size());
+
+    end_of_connection(conn);
+    return 0;
+}
+
+int delete_directory_tls(const std::string& relative_directory_path) {
+    // Establish TLS connection
+    Connection* conn = try_establish_connection(server_ip, server_port);
+    if (!conn) {
+        std::cerr << "Failed to open TLS connection\n";
+        return -1;
+    }
+
+    SSL_write(conn->ssl, "DD", 2); // Simple command to indicate delete directory
+    
+    // Send directory name length and name
+    std::string dirname = relative_directory_path; // Send relative path for server dir structure
+    uint32_t name_len = htonl(dirname.size());
+    SSL_write(conn->ssl, &name_len, sizeof(name_len));
+    SSL_write(conn->ssl, dirname.c_str(), dirname.size());
+
+    end_of_connection(conn);
+    return 0;
 }
 
 

@@ -9,6 +9,7 @@
 #include <openssl/err.h>
 #include "server.h"
 #include <filesystem>
+#include <sys/stat.h>
 
 int port = 0;
 
@@ -107,17 +108,31 @@ int main(int argc, char *argv[]) {
 
 
         // Handle command its the programmers responsibility to ensure that commands are all distinct and of a fixed length
-        if (std::strncmp(command, "UP", 2) == 0) {
+        if (std::strncmp(command, "UF", 2) == 0) {
             std::cout << "Received upload command from client\n";
             if(receive_file(ssl, directory) < 0) {
                 std::cerr << "Failed to receive file\n";
                 end_of_connection(ssl, client_fd);
                 continue;
             }
-        } else if (std::strncmp(command, "DL", 2) == 0) {
+        } else if (std::strncmp(command, "DF", 2) == 0) {
             std::cout << "Received delete command from client\n";
             if(delete_file(ssl, directory) < 0) {
                 std::cerr << "Failed to delete file\n";
+                end_of_connection(ssl, client_fd);
+                continue;
+            }
+        } else if (std::strncmp(command, "UD", 2) == 0) {
+            std::cout << "Received upload directory command from client\n";
+            if (receive_directory(ssl, directory) < 0) {
+                std::cerr << "Failed to receive directory\n";
+                end_of_connection(ssl, client_fd);
+                continue;
+            }
+        } else if (std::strncmp(command, "DD", 2) == 0) {
+            std::cout << "Received delete directory command from client\n";
+            if (delete_directory(ssl, directory) < 0) {
+                std::cerr << "Failed to delete directory\n";
                 end_of_connection(ssl, client_fd);
                 continue;
             }
@@ -224,4 +239,53 @@ int delete_file(SSL* ssl, const std::string& directory) {
         std::cerr << "Failed to delete file: " << e.what() << "\n" << std::flush;
         return -1;
     }
+}
+
+int receive_directory(SSL* ssl, const std::string& directory) {
+    uint32_t name_len = 0;
+    int n1 = SSL_read(ssl, &name_len, sizeof(name_len));
+    std::cout << "[DEBUG] Read directory name length: " << n1 << " bytes\n" << std::flush;
+    name_len = ntohl(name_len);
+    if (name_len == 0 || name_len > 256) {
+        std::cerr << "Invalid directory name length: " << name_len << "\n" << std::flush;
+        return -1;
+    }
+
+    std::string dirname(name_len, '\0');
+    int n2 = SSL_read(ssl, dirname.data(), name_len);
+    if (n2 != static_cast<int>(name_len)) {
+        std::cerr << "Failed to read full directory name\n" << std::flush;
+        return -1;
+    }
+    std::cout << "[DEBUG] Read directory name: '" << dirname << "' (" << n2 << " bytes)\n" << std::flush;
+
+    if (std::filesystem::create_directories(directory + "/" + dirname)) {
+        std::cerr << "Failed to create directory: " << dirname << "\n" << std::flush;
+        return -1;
+	}
+
+    return 0;
+}
+
+int delete_directory(SSL* ssl, const std::string& directory) {
+        uint32_t name_len = 0;
+    int n1 = SSL_read(ssl, &name_len, sizeof(name_len));
+    std::cout << "[DEBUG] Read directory name length: " << n1 << " bytes\n" << std::flush;
+    name_len = ntohl(name_len);
+    if (name_len == 0 || name_len > 256) {
+        std::cerr << "Invalid directory name length: " << name_len << "\n" << std::flush;
+        return -1;
+    }
+
+    std::string dirname(name_len, '\0');
+    int n2 = SSL_read(ssl, dirname.data(), name_len);
+    if (n2 != static_cast<int>(name_len)) {
+        std::cerr << "Failed to read full directory name\n" << std::flush;
+        return -1;
+    }
+    std::cout << "[DEBUG] Read directory name: '" << dirname << "' (" << n2 << " bytes)\n" << std::flush;
+
+    std::filesystem::remove_all(directory + "/" + dirname);
+    
+    return 0;
 }
