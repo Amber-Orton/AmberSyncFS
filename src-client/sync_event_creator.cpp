@@ -14,7 +14,7 @@ int create_priority_event_file(const char* event_type, const char* relative_path
 
 int create_non_priority_event_file(const char* event_type, const char* relative_path) {
     unsigned long event_num = event_counter.fetch_add(1, std::memory_order_relaxed);
-    return create_event_file(event_type, "ready", relative_path, event_num);
+    return create_event_file(event_type, "non_priority", relative_path, event_num);
 }
 
 void upload_file(const char* relative_path) {

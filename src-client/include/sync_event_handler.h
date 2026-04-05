@@ -1,1 +1,1 @@
-void handle_events();
+void handle_events(char *event_type);

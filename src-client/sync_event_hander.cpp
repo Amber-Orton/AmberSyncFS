@@ -6,10 +6,10 @@
 #include <iostream>
 #include "connection.h"
 
-void handle_events() {
+void handle_events(char *event_type) {
     while (true) {
         char ready_event_dir[256];
-        snprintf(ready_event_dir, sizeof(ready_event_dir), "%s/ready", event_dir);
+        snprintf(ready_event_dir, sizeof(ready_event_dir), "%s/ready/%s", event_dir, event_type);
         DIR* dir = opendir(ready_event_dir);
         if (dir) {
             struct dirent* entry;
@@ -23,7 +23,7 @@ void handle_events() {
                     if (f) {
                         char buf[256];
                         fgets(buf, sizeof(buf), f);
-                        if (strcmp(buf, "UPLOAD\n") == 0) {
+                        if (strcmp(buf, "UPLOAD_FILE\n") == 0) {
                             if (fgets(buf, sizeof(buf), f)) {
                                 buf[strcspn(buf, "\n")] = 0; // Remove newline
                                 printf("Handling upload event for file: %s\n", buf);
@@ -43,7 +43,7 @@ void handle_events() {
             }
             closedir(dir);
         } else {
-            std::cerr << "Failed to open event directory\n";
+            printf("Failed to open event directory: %s\n", ready_event_dir);
         }
         // sleep or yield to avoid busy-waiting
         usleep(100000); // 100ms

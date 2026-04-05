@@ -41,11 +41,23 @@ int main(int argc, char *argv[]) {
 	ensure_dir(buf);
 	snprintf(buf, sizeof(buf), "%s/ready", event_dir);
 	ensure_dir(buf);
+	snprintf(buf, sizeof(buf), "%s/ready/priority", event_dir);
+	ensure_dir(buf);
+	snprintf(buf, sizeof(buf), "%s/ready/non_priority", event_dir);
+	ensure_dir(buf);
 
-	pthread_t tracker_thread, event_handler_thread;
+
+	//create and runn threads
+	pthread_t tracker_thread, non_priority_event_handler_thread, priority_event_handler_thread;
 	pthread_create(&tracker_thread, nullptr, (void* (*)(void*))start_tracking, nullptr);
-	pthread_create(&event_handler_thread, nullptr, (void* (*)(void*))handle_events, nullptr);
+	char *non_priority = "non_priority";
+	// void *non_priority = &non_priority;
+	pthread_create(&non_priority_event_handler_thread, nullptr, (void* (*)(void*))handle_events, non_priority);
+	char *priority = "priority";
+	// void *priority = &priority;
+	pthread_create(&priority_event_handler_thread, nullptr, (void* (*)(void*))handle_events, priority);
 	pthread_join(tracker_thread, nullptr);
-	pthread_join(event_handler_thread, nullptr);
+	pthread_join(non_priority_event_handler_thread, nullptr);
+	pthread_join(priority_event_handler_thread, nullptr);
 	return 0;
 }
