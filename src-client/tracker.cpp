@@ -22,7 +22,7 @@ void start_tracking() {
         perror("inotify_init");
         return;
     }
-    if (!track_root) {
+    if (track_root.empty()) {
         std::cerr << "Tracking root directory is not set\n";
         close(fd);
         return;
@@ -47,21 +47,21 @@ void start_tracking() {
                 bool is_dir = event->mask & IN_ISDIR;
                 if (event->mask & IN_MODIFY || event->mask & IN_CREATE || event->mask & IN_MOVED_TO) {
                     if (is_dir)
-                        upload_directory(relative_path.c_str());
+                        upload_directory(relative_path);
                     else
-                        upload_file(relative_path.c_str());
+                        upload_file(relative_path);
                 }
                 if (event->mask & IN_DELETE || event->mask & IN_DELETE_SELF || event->mask & IN_MOVED_FROM) {
                     if (is_dir)
-                        delete_directory(relative_path.c_str());
+                        delete_directory(relative_path);
                     else
-                        delete_file(relative_path.c_str());
+                        delete_file(relative_path);
                 }
                 if (event->mask & IN_ACCESS || event->mask & IN_OPEN) {
                     if (is_dir)
-                        opened_directory(relative_path.c_str());
+                        opened_directory(relative_path);
                     else
-                        opened_file(relative_path.c_str());
+                        opened_file(relative_path);
                 }
                 unsigned known = IN_MODIFY | IN_CREATE | IN_DELETE | IN_ACCESS | IN_OPEN | IN_DELETE_SELF | IN_ISDIR | IN_MOVED_FROM | IN_MOVED_TO;
                 if ((event->mask & ~known) != 0) {
@@ -74,7 +74,7 @@ void start_tracking() {
     }
 }
 
-void track_file_or_directory(const char* track_root, const std::filesystem::directory_entry& entry, int fd, std::map<int, std::string>& wd_to_path) {
+void track_file_or_directory(const std::string& track_root, const std::filesystem::directory_entry& entry, int fd, std::map<int, std::string>& wd_to_path) {
     int wd = inotify_add_watch(fd, entry.path().c_str(), IN_MODIFY | IN_CREATE | IN_DELETE | IN_ACCESS | IN_OPEN | IN_DELETE_SELF | IN_MOVED_FROM | IN_MOVED_TO);
     std::string relative_path = std::filesystem::relative(entry.path(), track_root).string();
     wd_to_path[wd] = relative_path;

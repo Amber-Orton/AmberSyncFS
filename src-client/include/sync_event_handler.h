@@ -1,1 +1,3 @@
-void handle_events(char *event_type);
+#include <string>
+
+void handle_events(const std::string& event_type);

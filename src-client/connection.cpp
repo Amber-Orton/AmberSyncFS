@@ -13,9 +13,9 @@
 
 using Connection = struct connection;
 
-bool send_file_tls(const char* relative_file_path) {
+bool send_file_tls(const std::string& relative_file_path) {
     // Open file
-    std::string file_path = std::string(track_root) + "/" + relative_file_path;
+    std::string file_path = track_root + "/" + relative_file_path;
     std::ifstream file(file_path, std::ios::binary);
     if (!file) {
         std::cerr << "Failed to open file\n";
@@ -54,7 +54,7 @@ bool send_file_tls(const char* relative_file_path) {
     return true;
 }
 
-Connection* establish_connection(const char* server_ip, int port) {
+Connection* establish_connection(const std::string& server_ip, int port) {
     // Initialize OpenSSL
     SSL_library_init();
     SSL_load_error_strings();
@@ -94,7 +94,7 @@ Connection* establish_connection(const char* server_ip, int port) {
     sockaddr_in server_addr{};
     server_addr.sin_family = AF_INET;
     server_addr.sin_port = htons(port);
-    inet_pton(AF_INET, server_ip, &server_addr.sin_addr);
+    inet_pton(AF_INET, server_ip.c_str(), &server_addr.sin_addr);
 
     if (connect(sock, (sockaddr*)&server_addr, sizeof(server_addr)) < 0) {
         std::cerr << "Connection failed\n";

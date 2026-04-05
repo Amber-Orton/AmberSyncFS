@@ -10,6 +10,8 @@
 #include "server.h"
 #include <filesystem>
 
+int port = 0;
+
 int main(int argc, char *argv[]) {
 	if (argc != 3) {
 		fprintf(stderr, "Usage: %s <port> <directory>\n", argv[0]);
@@ -24,7 +26,7 @@ int main(int argc, char *argv[]) {
         return 1;
     }
     // and check that it exists and is a directory
-    const char* directory = argv[2];
+    std::string directory = argv[2];
     if (!std::filesystem::exists(directory) || !std::filesystem::is_directory(directory)) {
         std::cerr << "Provided path is not a valid directory: " << directory << "\n";
         return 1;
@@ -137,7 +139,7 @@ void shutdown_ssl(SSL* ssl) {
     } while (shutdown_result == 0);
 }
 
-int receive_file(SSL* ssl, const char* directory) {
+int receive_file(SSL* ssl, const std::string& directory) {
     uint32_t name_len = 0;
     int n1 = SSL_read(ssl, &name_len, sizeof(name_len));
     std::cout << "[DEBUG] Read file name length: " << n1 << " bytes\n" << std::flush;

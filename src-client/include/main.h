@@ -1,9 +1,10 @@
 #include <atomic>
+#include <string>
 
 
-extern char *device_name;
-extern char *server_ip;
+extern std::string device_name;
+extern std::string server_ip;
 extern int server_port;
-extern char *track_root;
+extern std::string track_root;
 extern std::atomic_ulong event_counter;
-extern const char* event_dir;
+extern const std::string event_dir;

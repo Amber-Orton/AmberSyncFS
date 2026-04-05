@@ -3,10 +3,11 @@
 #define SERVER_H
 
 #include <openssl/ssl.h>
+#include <string>
 
-static int port;
+extern int port;
 
 void shutdown_ssl(SSL* ssl);
-int receive_file(SSL* ssl, const char* directory);
+int receive_file(SSL* ssl, const std::string& directory);
 
 #endif // SERVER_H

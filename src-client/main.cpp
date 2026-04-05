@@ -5,19 +5,20 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <errno.h>
-#include <pthread.h>
+#include <thread>
+#include <cstdlib>
 
 
 
-char *device_name = nullptr;
-char *server_ip = nullptr;
+std::string device_name;
+std::string server_ip;
 int server_port = 0;
-char *track_root = nullptr;
+std::string track_root;
 std::atomic_ulong event_counter{0};
-const char* event_dir = "/tmp/ambersyncfs_events";
+const std::string event_dir = "/tmp/ambersyncfs_events";
 
-void ensure_dir(const char* path) {
-	if (mkdir(path, 0777) && errno != EEXIST) {
+void ensure_dir(const std::string& path) {
+	if (mkdir(path.c_str(), 0777) && errno != EEXIST) {
 		perror("mkdir");
 		exit(1);
 	}
@@ -31,33 +32,23 @@ int main(int argc, char *argv[]) {
 	printf("Starting AmberSyncFS client with device: %s, server IP: %s, server port: %s, tracking directory: %s\n", argv[1], argv[2], argv[3], argv[4]);
 	device_name = argv[1];
 	server_ip = argv[2];
-	server_port = atoi(argv[3]);
+	server_port = std::stoi(argv[3]);
 	track_root = argv[4];
 
 	// Ensure event directories exist
 	ensure_dir(event_dir);
-	char buf[256];
-	snprintf(buf, sizeof(buf), "%s/in_creation", event_dir);
-	ensure_dir(buf);
-	snprintf(buf, sizeof(buf), "%s/ready", event_dir);
-	ensure_dir(buf);
-	snprintf(buf, sizeof(buf), "%s/ready/priority", event_dir);
-	ensure_dir(buf);
-	snprintf(buf, sizeof(buf), "%s/ready/non_priority", event_dir);
-	ensure_dir(buf);
+	ensure_dir(event_dir + "/in_creation");
+	ensure_dir(event_dir + "/ready");
+	ensure_dir(event_dir + "/ready/priority");
+	ensure_dir(event_dir + "/ready/non_priority");
 
 
-	//create and runn threads
-	pthread_t tracker_thread, non_priority_event_handler_thread, priority_event_handler_thread;
-	pthread_create(&tracker_thread, nullptr, (void* (*)(void*))start_tracking, nullptr);
-	char *non_priority = "non_priority";
-	// void *non_priority = &non_priority;
-	pthread_create(&non_priority_event_handler_thread, nullptr, (void* (*)(void*))handle_events, non_priority);
-	char *priority = "priority";
-	// void *priority = &priority;
-	pthread_create(&priority_event_handler_thread, nullptr, (void* (*)(void*))handle_events, priority);
-	pthread_join(tracker_thread, nullptr);
-	pthread_join(non_priority_event_handler_thread, nullptr);
-	pthread_join(priority_event_handler_thread, nullptr);
+	//create and run threads
+	std::thread tracker_thread(start_tracking);
+	std::thread non_priority_event_handler_thread(handle_events, std::string("non_priority"));
+	std::thread priority_event_handler_thread(handle_events, std::string("priority"));
+	tracker_thread.join();
+	non_priority_event_handler_thread.join();
+	priority_event_handler_thread.join();
 	return 0;
 }

@@ -6,20 +6,18 @@
 #include <iostream>
 #include "connection.h"
 
-void handle_events(char *event_type) {
+void handle_events(const std::string& event_type) {
     while (true) {
-        char ready_event_dir[256];
-        snprintf(ready_event_dir, sizeof(ready_event_dir), "%s/ready/%s", event_dir, event_type);
-        DIR* dir = opendir(ready_event_dir);
+        std::string ready_event_dir = event_dir + "/ready/" + event_type;
+        DIR* dir = opendir(ready_event_dir.c_str());
         if (dir) {
             struct dirent* entry;
             while ((entry = readdir(dir)) != nullptr) {
                 if (strcmp(entry->d_name, ".") && strcmp(entry->d_name, "..")) {
                     printf("Found event file: %s\n", entry->d_name);
-                    char event_file_path[512];
-                    snprintf(event_file_path, sizeof(event_file_path), "%s/%s", ready_event_dir, entry->d_name);
+                    std::string event_file_path = ready_event_dir + "/" + entry->d_name;
                     
-                    FILE* f = fopen(event_file_path, "r");
+                    FILE* f = fopen(event_file_path.c_str(), "r");
                     if (f) {
                         char buf[256];
                         fgets(buf, sizeof(buf), f);
@@ -30,12 +28,12 @@ void handle_events(char *event_type) {
                                 send_file_tls(buf);
                             }
                         } else {
-                            printf("Unknown event type in file %s: %s\n", event_file_path, buf);
+                            printf("Unknown event type in file %s: %s\n", event_file_path.c_str(), buf);
                         }
 
                         // close and delete the event file
                         fclose(f);
-                        remove(event_file_path);
+                        remove(event_file_path.c_str());
                     } else {
                         std::cerr << "Failed to open event file: " << event_file_path << "\n";
                     }
@@ -43,7 +41,7 @@ void handle_events(char *event_type) {
             }
             closedir(dir);
         } else {
-            printf("Failed to open event directory: %s\n", ready_event_dir);
+            printf("Failed to open event directory: %s\n", ready_event_dir.c_str());
         }
         // sleep or yield to avoid busy-waiting
         usleep(100000); // 100ms
