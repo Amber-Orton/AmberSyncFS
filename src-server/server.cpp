@@ -108,26 +108,39 @@ int main(int argc, char *argv[]) {
 
         // Handle command its the programmers responsibility to ensure that commands are all distinct and of a fixed length
         if (std::strncmp(command, "UP", 2) == 0) {
-             std::cout << "Received upload command from client\n";
+            std::cout << "Received upload command from client\n";
             if(receive_file(ssl, directory) < 0) {
                 std::cerr << "Failed to receive file\n";
-                shutdown_ssl(ssl);
-                SSL_free(ssl);
-                close(client_fd);
+                end_of_connection(ssl, client_fd);
                 continue;
             }
+        } else if (std::strncmp(command, "DL", 2) == 0) {
+            std::cout << "Received delete command from client\n";
+            if(delete_file(ssl, directory) < 0) {
+                std::cerr << "Failed to delete file\n";
+                end_of_connection(ssl, client_fd);
+                continue;
+            }
+        } else {
+            std::cerr << "Unknown command received from client: " << std::string(command, 2) << "\n";
+            end_of_connection(ssl, client_fd);
+            continue;
         }
 
 
 
-        shutdown_ssl(ssl);
-        SSL_free(ssl);
-        close(client_fd);
+        end_of_connection(ssl, client_fd);
     }
     SSL_CTX_free(ctx);
     close(server_fd);
     return 0;
 }
+
+void end_of_connection(SSL* ssl, int client_fd) {
+    shutdown_ssl(ssl);
+    SSL_free(ssl);
+    close(client_fd);
+} 
 
 void shutdown_ssl(SSL* ssl) {
     int shutdown_result;
@@ -149,12 +162,17 @@ int receive_file(SSL* ssl, const std::string& directory) {
         return -1;
     }
 
-    char filename[257] = {0};
-    int n2 = SSL_read(ssl, filename, name_len);
-    filename[name_len] = '\0';
+    std::string filename(name_len, '\0');
+    int n2 = SSL_read(ssl, filename.data(), name_len);
+    if (n2 != static_cast<int>(name_len)) {
+        std::cerr << "Failed to read full file name\n" << std::flush;
+        return -1;
+    }
     std::cout << "[DEBUG] Read file name: '" << filename << "' (" << n2 << " bytes)\n" << std::flush;
 
-    std::ofstream outfile(std::filesystem::path(directory) / filename, std::ios::binary);
+    std::filesystem::path output_path(directory);
+    output_path.append(filename);
+    std::ofstream outfile(output_path, std::ios::binary);
     if (!outfile) {
         std::cerr << "Failed to open file for writing: " << filename << "\n" << std::flush;
         return -1;
@@ -172,4 +190,38 @@ int receive_file(SSL* ssl, const std::string& directory) {
     outfile.flush();
     outfile.close();
     return 0;
+}
+
+int delete_file(SSL* ssl, const std::string& directory) {
+    uint32_t name_len = 0;
+    int n1 = SSL_read(ssl, &name_len, sizeof(name_len));
+    std::cout << "[DEBUG] Read file name length for deletion: " << n1 << " bytes\n" << std::flush;
+    name_len = ntohl(name_len);
+    if (name_len == 0 || name_len > 256) {
+        std::cerr << "Invalid filename length for deletion: " << name_len << "\n" << std::flush;
+        return -1;
+    }
+
+    std::string filename(name_len, '\0');
+    int n2 = SSL_read(ssl, filename.data(), name_len);
+    if (n2 != static_cast<int>(name_len)) {
+        std::cerr << "Failed to read full file name for deletion\n" << std::flush;
+        return -1;
+    }
+    std::cout << "[DEBUG] Read file name for deletion: '" << filename << "' (" << n2 << " bytes)\n" << std::flush;
+
+    std::filesystem::path file_path(directory);
+    file_path.append(filename);
+    if (!std::filesystem::exists(file_path)) {
+        std::cerr << "File to delete does not exist: " << file_path << "\n" << std::flush;
+        return -1;
+    }
+    try {
+        std::filesystem::remove(file_path);
+        std::cout << "Deleted file: '" << file_path.string() << "'\n" << std::flush;
+        return 0;
+    } catch (const std::filesystem::filesystem_error& e) {
+        std::cerr << "Failed to delete file: " << e.what() << "\n" << std::flush;
+        return -1;
+    }
 }

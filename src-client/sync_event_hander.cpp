@@ -82,6 +82,12 @@ void process_event_file(const std::string& event_file_path) {
                 printf("Handling upload event for file: %s\n", buf);
                 send_file_tls(buf);
             }
+        } else if (strcmp(buf, "DELETE_FILE\n") == 0) {
+            if (fgets(buf, sizeof(buf), f)) {
+                buf[strcspn(buf, "\n")] = 0; // Remove newline
+                printf("Handling delete event for file: %s\n", buf);
+                delete_file_tls(buf);
+            }
         } else {
             printf("Unknown event type in file %s: %s\n", event_file_path.c_str(), buf);
         }

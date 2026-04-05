@@ -54,6 +54,28 @@ bool send_file_tls(const std::string& relative_file_path) {
     return true;
 }
 
+bool delete_file_tls(const std::string& relative_file_path) {
+    // Establish TLS connection
+    Connection* conn = establish_connection(server_ip, server_port);
+    if (!conn) {
+        std::cerr << "Failed to open TLS connection\n";
+        return false;
+    }
+
+    SSL_write(conn->ssl, "DL", 2); // Simple command to indicate delete
+    
+    // Send file name length and name
+    std::string filename = relative_file_path; // Send relative path for server dir structure
+    uint32_t name_len = htonl(filename.size());
+    SSL_write(conn->ssl, &name_len, sizeof(name_len));
+    SSL_write(conn->ssl, filename.c_str(), filename.size());
+
+    end_of_connection(conn);
+    return true;
+}
+
+
+
 Connection* establish_connection(const std::string& server_ip, int port) {
     // Initialize OpenSSL
     SSL_library_init();
