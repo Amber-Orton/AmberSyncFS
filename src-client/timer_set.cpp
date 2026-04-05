@@ -3,9 +3,13 @@
 #include "sync_event_creator.h"
 #include <iostream>
 
+timer_set timer_set_instance = timer_set();
+
+std::atomic<bool> timer_set::cleanup_thread_running{false};
+
 // Checks if an element is in the set and adds it if it's not.
 // Returns 1 if present and refreshed, 0 if missing or eligible for event creation.
-int timer_set::check_and_add(const std::string& event_type, const std::string& event_priority, const std::string& relative_path) {
+int timer_set::check(const std::string& event_type, const std::string& event_priority, const std::string& relative_path) {
     pthread_t cleanup_thread;
     pthread_create(&cleanup_thread, nullptr, &timer_set::cleanup_thread_func, this);
     pthread_detach(cleanup_thread);
@@ -28,6 +32,7 @@ int timer_set::check_and_add(const std::string& event_type, const std::string& e
     return 0;
 }
 
+// Cleans up entries that haven't been accessed for more than 5 seconds and creates events for those that have been accessed at least once since creation.
 void timer_set::cleanup() {
     auto now = std::chrono::steady_clock::now();
     for (auto item = myset.begin(); item != myset.end();) {
@@ -66,7 +71,11 @@ void timer_set::cleanup() {
 }
 
 void* timer_set::cleanup_thread_func(void* arg) {
+    if (cleanup_thread_running.exchange(true)) {
+        return nullptr;
+    }
     timer_set* self = static_cast<timer_set*>(arg);
     self->cleanup();
+    cleanup_thread_running.store(false);
     return nullptr;
 }

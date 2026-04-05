@@ -2,17 +2,18 @@
 #include <atomic>
 #include "sync_event_creator.h"
 #include "connection.h"
+#include "timer_set.h"
 #include "main.h"
 #include <stdlib.h>
 #include <iostream>
 #include <unistd.h>
 
 int create_priority_event_file(const std::string& event_type, const std::string& relative_path) {
-    return create_event_file(event_type, "priority", relative_path);
+    return create_event_file_checked(event_type, "priority", relative_path);
 }
 
 int create_non_priority_event_file(const std::string& event_type, const std::string& relative_path) {
-    return create_event_file(event_type, "non_priority", relative_path);
+    return create_event_file_checked(event_type, "non_priority", relative_path);
 }
 
 void upload_file(const std::string& relative_path) {
@@ -70,11 +71,6 @@ void opened_directory(const std::string& relative_path) {
 }
 
 int create_event_file(const std::string& event_type, const std::string& event_type_folder, const std::string& relative_path) {
-    // check if event creation is allowed by timer set
-    
-    
-    
-    
     unsigned long event_num = event_counter.fetch_add(1, std::memory_order_relaxed);
     char filename_template[512];
     snprintf(filename_template, sizeof(filename_template), "%s/in_creation/event_XXXXXX", event_dir.c_str());
@@ -98,4 +94,11 @@ int create_event_file(const std::string& event_type, const std::string& event_ty
     snprintf(final_filename, sizeof(final_filename), "%s/ready/%s/event_%lu", event_dir.c_str(), event_type_folder.c_str(), event_num);
     rename(filename_template, final_filename);
     return 0;
+}
+
+int create_event_file_checked(const std::string& event_type, const std::string& event_type_folder, const std::string& relative_path) {
+    if (timer_set_instance.check(event_type, event_type_folder, relative_path) == 0) {
+        return -1;
+    }
+    return create_event_file(event_type, event_type_folder, relative_path);
 }
