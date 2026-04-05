@@ -70,6 +70,11 @@ void opened_directory(const std::string& relative_path) {
 }
 
 int create_event_file(const std::string& event_type, const std::string& event_type_folder, const std::string& relative_path) {
+    // check if event creation is allowed by timer set
+    
+    
+    
+    
     unsigned long event_num = event_counter.fetch_add(1, std::memory_order_relaxed);
     char filename_template[512];
     snprintf(filename_template, sizeof(filename_template), "%s/in_creation/event_XXXXXX", event_dir.c_str());
