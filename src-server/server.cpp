@@ -128,39 +128,43 @@ int main(int argc, char *argv[]) {
         // means can be DOSed by opening many connections and sending commands without closing them but clients are certified and assumed to be non-malicious
         if (std::strncmp(command, "UF", 2) == 0) {
             std::cout << "Received upload command from client\n";
-            std::thread([ssl, client_fd, directory](){
-                if(receive_file(ssl, directory) < 0) {
+            std::thread([ssl, client_fd, directory]() {
+                if (receive_file(ssl, directory) < 0) {
                     std::cerr << "Failed to receive file\n";
                     close_connection(ssl, client_fd);
+                } else {
+                    end_of_connection(ssl, client_fd);
                 }
-                end_of_connection(ssl, client_fd);
             }).detach();
         } else if (std::strncmp(command, "DF", 2) == 0) {
             std::cout << "Received delete command from client\n";
-            std::thread([ssl, client_fd, directory](){
-                if(delete_file(ssl, directory) < 0) {
+            std::thread([ssl, client_fd, directory]() {
+                if (delete_file(ssl, directory) < 0) {
                     std::cerr << "Failed to delete file\n";
                     close_connection(ssl, client_fd);
+                } else {
+                    end_of_connection(ssl, client_fd);
                 }
-                end_of_connection(ssl, client_fd);
             }).detach();
         } else if (std::strncmp(command, "UD", 2) == 0) {
             std::cout << "Received upload directory command from client\n";
-            std::thread([ssl, client_fd, directory](){
+            std::thread([ssl, client_fd, directory]() {
                 if (receive_directory(ssl, directory) < 0) {
                     std::cerr << "Failed to receive directory\n";
                     close_connection(ssl, client_fd);
+                } else {
+                    end_of_connection(ssl, client_fd);
                 }
-                end_of_connection(ssl, client_fd);
             }).detach();
         } else if (std::strncmp(command, "DD", 2) == 0) {
             std::cout << "Received delete directory command from client\n";
-            std::thread([ssl, client_fd, directory](){
+            std::thread([ssl, client_fd, directory]() {
                 if (delete_directory(ssl, directory) < 0) {
                     std::cerr << "Failed to delete directory\n";
                     close_connection(ssl, client_fd);
+                } else {
+                    end_of_connection(ssl, client_fd);
                 }
-                end_of_connection(ssl, client_fd);
             }).detach();
         } else {
             std::cerr << "Unknown command received from client: " << std::string(command, 2) << "\n";

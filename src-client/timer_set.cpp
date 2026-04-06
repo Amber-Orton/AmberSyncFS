@@ -36,9 +36,11 @@ int timer_set::check(const std::string& event_type, const std::string& relative_
 void timer_set::cleanup() {
     auto now = std::chrono::steady_clock::now();
     for (auto item = myset.begin(); item != myset.end();) {
-        if (now - item->second.last_access_time > std::chrono::seconds(5)) {
+        auto elapsed = now - item->second.last_access_time;
+        if (elapsed > std::chrono::seconds(5)) {
             bool should_create_event = item->second.access_count >= 1;
             std::string event_key = item->first;
+            std::cout << "[timer_set::cleanup] Expiring key: '" << event_key << "', access_count=" << item->second.access_count << ", elapsed=" << std::chrono::duration_cast<std::chrono::seconds>(elapsed).count() << "s\n";
             item = myset.erase(item);
 
             if (should_create_event) {
@@ -48,15 +50,16 @@ void timer_set::cleanup() {
                     continue;
                 }
 
-
                 auto event_type = event_key.substr(0, split_pos);
                 auto relative_path = event_key.substr(split_pos + 1);
                 if (event_type.empty() || relative_path.empty()) {
                     std::cerr << "Invalid event key format: " << event_key << "\n";
                     continue;
                 }
-
+                std::cout << "[timer_set::cleanup] Creating event for expired key: type='" << event_type << "', path='" << relative_path << "'\n";
                 create_event_file(event_type, relative_path);
+            } else {
+                std::cout << "[timer_set::cleanup] Not creating event for expired key: '" << event_key << "' (access_count < 1)\n";
             }
         } else {
             ++item;
