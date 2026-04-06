@@ -2,10 +2,12 @@
 #include <pthread.h>
 #include "sync_event_creator.h"
 #include <iostream>
+#include <thread>
 
 timer_set timer_set_instance = timer_set();
 
 std::atomic<bool> timer_set::cleanup_thread_running{false};
+std::atomic<bool> timer_set::cleanup_thread_run_again{false};
 
 // Checks if an element is in the set and adds it if it's not.
 // Returns 1 if present and refreshed, 0 if missing or eligible for event creation.
@@ -69,10 +71,14 @@ void timer_set::cleanup() {
 
 void* timer_set::cleanup_thread_func(void* arg) {
     if (cleanup_thread_running.exchange(true)) {
+        cleanup_thread_run_again.store(true);
         return nullptr;
     }
-    timer_set* self = static_cast<timer_set*>(arg);
-    self->cleanup();
+    while (cleanup_thread_run_again.exchange(false)) {
+        std::this_thread::sleep_for(std::chrono::seconds(5));
+        timer_set* self = static_cast<timer_set*>(arg);
+        self->cleanup();
+    }
     cleanup_thread_running.store(false);
     return nullptr;
 }

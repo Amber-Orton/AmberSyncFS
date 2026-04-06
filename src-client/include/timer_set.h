@@ -14,6 +14,7 @@ struct access_info {
 struct timer_set {
 	std::unordered_map<std::string, access_info> myset;
 	static std::atomic<bool> cleanup_thread_running;
+	static std::atomic<bool> cleanup_thread_run_again;
 
 	int check(const std::string& event_type, const std::string& relative_path);
 	void cleanup();
