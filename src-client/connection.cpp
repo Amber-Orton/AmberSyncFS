@@ -13,15 +13,18 @@
 #include <mutex>
 #include <algorithm>
 #include <thread>
+#include <condition_variable>
 
 
 using Connection = struct connection;
 
 std::atomic<bool> is_connected{false};
-std::atomic<bool> connection_try_in_progress{false};
 auto connection_retry_timeout = std::chrono::seconds(1);
 auto last_connection_attempt_time = std::chrono::steady_clock::now() - std::chrono::seconds(10);
 const auto max_retry_timeout = std::chrono::seconds(60);
+
+std::mutex connection_try_mutex;
+
 
 int send_file_tls(const std::string& relative_file_path) {
     // Open file
@@ -135,30 +138,32 @@ Connection* try_establish_connection(const std::string& server_ip, int port) {
                 is_connected.store(false);
             }
         }
-        auto time_since_last_attempt = std::chrono::steady_clock::now() - last_connection_attempt_time;
-        if (time_since_last_attempt < connection_retry_timeout) {
-            std::cout << "Waiting before next connection attempt for " << (connection_retry_timeout - time_since_last_attempt).count() / 1000000000 << " s\n";
-            std::this_thread::sleep_for((connection_retry_timeout - time_since_last_attempt) * (1 + rand() % 5)); // *1.1 so one thread leaves before rest, this does not need to be strict
-        }
-        if (connection_try_in_progress.exchange(true)) { // other thread is trying to connect
-            std::this_thread::sleep_for(std::chrono::milliseconds(100 * (1 + rand() % 5)));
-            continue; // check connection status again after waiting, if other thread succeeded we can just return, otherwise we will try to connect ourselves
-        }
+
+        // lock notification
+        std::lock_guard<std::mutex> lock(connection_try_mutex);
         if (is_connected.load()) {
-            connection_try_in_progress.store(false);
-            continue; // another thread established connection while we were waiting or processing.
+            continue; // another thread connected while we were waiting for the lock, just loop back and check connection status again
         }
-        auto conn = establish_connection(server_ip, port);
-        if (conn != nullptr) {
-            is_connected.store(true);
-            connection_retry_timeout = std::chrono::seconds(1); // reset retry timeout after successful connection
+        while (true) {
+            // sleep if whithin retry time
+            auto time_since_last_attempt = std::chrono::steady_clock::now() - last_connection_attempt_time;
+            if (time_since_last_attempt < connection_retry_timeout) {
+                double jitter = 0.9 + (rand() % 21) / 100.0; // 0.90 to 1.10
+                auto wait_time = std::chrono::duration_cast<std::chrono::milliseconds>((connection_retry_timeout - time_since_last_attempt) * jitter);
+                std::cout << "Waiting before next connection attempt for " << wait_time << "\n";
+                std::this_thread::sleep_for(wait_time);
+            }
+            // attempt connection
+            auto conn = establish_connection(server_ip, port);
             last_connection_attempt_time = std::chrono::steady_clock::now();
-            connection_try_in_progress.store(false);
-            return conn;
-        } else {
-            connection_retry_timeout = std::min(connection_retry_timeout * 2, max_retry_timeout);
-            last_connection_attempt_time = std::chrono::steady_clock::now();
-            connection_try_in_progress.store(false);
+            if (conn != nullptr) {
+                is_connected.store(true);
+                connection_retry_timeout = std::chrono::seconds(1); // reset retry timeout after successful connection
+                std::cout << "Successfully established connection to server\n";
+                return conn;
+            } else {
+                connection_retry_timeout = std::min(connection_retry_timeout * 2, max_retry_timeout);
+            }
         }
     }
 }
