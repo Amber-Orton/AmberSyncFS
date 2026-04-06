@@ -112,33 +112,33 @@ int main(int argc, char *argv[]) {
             std::cout << "Received upload command from client\n";
             if(receive_file(ssl, directory) < 0) {
                 std::cerr << "Failed to receive file\n";
-                end_of_connection(ssl, client_fd);
+                close_connection(ssl, client_fd);
                 continue;
             }
         } else if (std::strncmp(command, "DF", 2) == 0) {
             std::cout << "Received delete command from client\n";
             if(delete_file(ssl, directory) < 0) {
                 std::cerr << "Failed to delete file\n";
-                end_of_connection(ssl, client_fd);
+                close_connection(ssl, client_fd);
                 continue;
             }
         } else if (std::strncmp(command, "UD", 2) == 0) {
             std::cout << "Received upload directory command from client\n";
             if (receive_directory(ssl, directory) < 0) {
                 std::cerr << "Failed to receive directory\n";
-                end_of_connection(ssl, client_fd);
+                close_connection(ssl, client_fd);
                 continue;
             }
         } else if (std::strncmp(command, "DD", 2) == 0) {
             std::cout << "Received delete directory command from client\n";
             if (delete_directory(ssl, directory) < 0) {
                 std::cerr << "Failed to delete directory\n";
-                end_of_connection(ssl, client_fd);
+                close_connection(ssl, client_fd);
                 continue;
             }
         } else {
             std::cerr << "Unknown command received from client: " << std::string(command, 2) << "\n";
-            end_of_connection(ssl, client_fd);
+            close_connection(ssl, client_fd);
             continue;
         }
 
@@ -152,6 +152,10 @@ int main(int argc, char *argv[]) {
 }
 
 void end_of_connection(SSL* ssl, int client_fd) {
+    close_connection(ssl, client_fd);
+}
+
+void close_connection(SSL* ssl, int client_fd) {
     shutdown_ssl(ssl);
     SSL_free(ssl);
     close(client_fd);
