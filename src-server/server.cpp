@@ -11,7 +11,6 @@
 #include "server.h"
 #include <filesystem>
 #include <sys/stat.h>
-#include "../src-common/send_recive.h"
 
 int port = 0;
 
@@ -107,7 +106,7 @@ int main(int argc, char *argv[]) {
         int bytes_read = safe_SSL_read(conn, command, sizeof(command)); // Read command type (e.g., "UP" for upload)
         if (bytes_read <= 0) {
             std::cerr << "Failed to read command from client\n";
-            close_connection(ssl, client_fd);
+            close_connection(conn);
             continue;
         }
 

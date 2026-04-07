@@ -55,7 +55,7 @@ int send_delete_file(const std::string& relative_file_path) {
         return -1;
     }
 
-    int sucess = send_delete_file_tls(track_root, relative_file_path, conn);
+    int sucess = send_delete_file_tls(relative_file_path, conn);
 
     if (sucess >= 0) {
         end_of_connection(conn);
@@ -75,7 +75,7 @@ int send_directory(const std::string& relative_directory_path) {
         return -1;
     }
 
-    int sucess = send_directory_tls(track_root, relative_directory_path, conn);
+    int sucess = send_directory_tls(relative_directory_path, conn);
 
     if (sucess >= 0) {
         end_of_connection(conn);
@@ -96,7 +96,7 @@ int send_delete_directory(const std::string& relative_directory_path) {
         return -1;
     }
 
-    int sucess = send_delete_directory_tls(track_root, relative_directory_path, conn);
+    int sucess = send_delete_directory_tls(relative_directory_path, conn);
 
     if (sucess >= 0) {
         end_of_connection(conn);

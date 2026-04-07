@@ -23,7 +23,7 @@ SERVER_OBJ = $(BUILD_DIR)/server.o $(BUILD_DIR)/send_recive_common.o
 
 # Client
 CLIENT_TARGET = client
-CLIENT_SRC = $(wildcard $(SRC_CLIENT_DIR)/*.cpp) src-common/send_recive.cpp
+CLIENT_SRC = $(wildcard $(SRC_CLIENT_DIR)/*.cpp)
 CLIENT_OBJ = $(patsubst $(SRC_CLIENT_DIR)/%.cpp,$(BUILD_DIR)/%.o,$(CLIENT_SRC)) $(BUILD_DIR)/send_recive_common.o
 
 

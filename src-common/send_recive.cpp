@@ -98,7 +98,7 @@ int send_file_tls(std::string relative_start_directory, std::string relative_fil
     return 0;
 }
 
-int send_delete_file_tls(std::string relative_start_directory, std::string relative_file_path, Connection* conn) {
+int send_delete_file_tls(std::string relative_file_path, Connection* conn) {
     if (safe_SSL_write(conn, "DF", 2) < 0) { // Simple command to indicate delete
         std::cerr << "Failed to send delete command\n";
         return -1;
@@ -119,7 +119,7 @@ int send_delete_file_tls(std::string relative_start_directory, std::string relat
     return 0;
 }
 
-int send_directory_tls(std::string relative_start_directory, std::string relative_directory_path, Connection* conn) {
+int send_directory_tls(std::string relative_directory_path, Connection* conn) {
     if (safe_SSL_write(conn, "UD", 2) < 0) { // Simple command to indicate upload directory
         std::cerr << "Failed to send upload directory command\n";
         return -1;
@@ -140,7 +140,7 @@ int send_directory_tls(std::string relative_start_directory, std::string relativ
     return 0;
 }
 
-int send_delete_directory_tls(std::string relative_start_directory, std::string relative_directory_path, Connection* conn) {
+int send_delete_directory_tls(std::string relative_directory_path, Connection* conn) {
     if (safe_SSL_write(conn, "DD", 2) < 0) { // Simple command to indicate delete directory
         std::cerr << "Failed to send delete directory command\n";
         return -1;
@@ -161,7 +161,7 @@ int send_delete_directory_tls(std::string relative_start_directory, std::string 
     return 0;
 }
 
-int receive_file_tls(std::string directory, Connection* conn) {
+int receive_file_tls(std::string relative_directory_path, Connection* conn) {
     uint32_t name_len = 0;
     int n1 = safe_SSL_read(conn, &name_len, sizeof(name_len));
     if (n1 <= 0) {
@@ -183,7 +183,7 @@ int receive_file_tls(std::string directory, Connection* conn) {
     }
     std::cout << "[DEBUG] Read file name: '" << filename << "' (" << n2 << " bytes)\n" << std::flush;
 
-    std::filesystem::path output_path(directory);
+    std::filesystem::path output_path(relative_directory_path);
     output_path.append(filename);
     std::ofstream outfile(output_path, std::ios::binary);
     if (!outfile) {
@@ -210,7 +210,7 @@ int receive_file_tls(std::string directory, Connection* conn) {
     return 0;
 }
 
-int receive_delete_file_tls(std::string directory, Connection* conn) {
+int receive_delete_file_tls(std::string relative_directory_path, Connection* conn) {
     uint32_t name_len = 0;
     int n1 = safe_SSL_read(conn, &name_len, sizeof(name_len));
     if (n1 <= 0) {
@@ -232,7 +232,7 @@ int receive_delete_file_tls(std::string directory, Connection* conn) {
     }
     std::cout << "[DEBUG] Read file name for deletion: '" << filename << "' (" << n2 << " bytes)\n" << std::flush;
 
-    std::filesystem::path file_path(directory);
+    std::filesystem::path file_path(relative_directory_path);
     file_path.append(filename);
     if (!std::filesystem::exists(file_path)) {
         std::cerr << "File to delete does not exist: " << file_path << "\n" << std::flush;
@@ -248,7 +248,7 @@ int receive_delete_file_tls(std::string directory, Connection* conn) {
     }
 }
 
-int receive_directory_tls(std::string directory, Connection* conn) {
+int receive_directory_tls(std::string relative_directory_path, Connection* conn) {
     uint32_t name_len = 0;
     int n1 = safe_SSL_read(conn, &name_len, sizeof(name_len));
     if (n1 <= 0) {
@@ -270,7 +270,7 @@ int receive_directory_tls(std::string directory, Connection* conn) {
     }
     std::cout << "[DEBUG] Read directory name: '" << dirname << "' (" << n2 << " bytes)\n" << std::flush;
 
-    if (std::filesystem::create_directories(directory + "/" + dirname)) {
+    if (std::filesystem::create_directories(relative_directory_path + "/" + dirname)) {
         std::cerr << "Failed to create directory: " << dirname << "\n" << std::flush;
         return -1;
 	}
@@ -278,7 +278,7 @@ int receive_directory_tls(std::string directory, Connection* conn) {
     return 0;
 }
 
-int receive_delete_directory_tls(std::string directory, Connection* conn) {
+int receive_delete_directory_tls(std::string relative_directory_path, Connection* conn) {
         uint32_t name_len = 0;
     int n1 = safe_SSL_read(conn, &name_len, sizeof(name_len));
     if (n1 <= 0) {
@@ -300,7 +300,7 @@ int receive_delete_directory_tls(std::string directory, Connection* conn) {
     }
     std::cout << "[DEBUG] Read directory name: '" << dirname << "' (" << n2 << " bytes)\n" << std::flush;
 
-    std::filesystem::remove_all(directory + "/" + dirname);
+    std::filesystem::remove_all(relative_directory_path + "/" + dirname);
     
     return 0;
 }
