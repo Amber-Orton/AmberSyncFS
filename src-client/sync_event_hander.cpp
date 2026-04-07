@@ -64,25 +64,25 @@ int process_event_file(std::string event_file_path) {
             if (fgets(buf, sizeof(buf), f)) {
                 buf[strcspn(buf, "\n")] = 0; // Remove newline
                 printf("Handling upload event for file: %s\n", buf);
-                sucess = send_file_tls(buf);
+                sucess = send_file(buf);
             }
         } else if (strcmp(buf, "DELETE_FILE\n") == 0) {
             if (fgets(buf, sizeof(buf), f)) {
                 buf[strcspn(buf, "\n")] = 0; // Remove newline
                 printf("Handling delete event for file: %s\n", buf);
-                sucess = delete_file_tls(buf);
+                sucess = send_delete_file(buf);
             }
         } else if (strcmp(buf, "UPLOAD_DIR\n") == 0) {
             if (fgets(buf, sizeof(buf), f)) {
                 buf[strcspn(buf, "\n")] = 0; // Remove newline
                 printf("Handling upload event for directory: %s\n", buf);
-                sucess = send_directory_tls(buf);
+                sucess = send_directory(buf);
             }
         } else if (strcmp(buf, "DELETE_DIR\n") == 0) {
             if (fgets(buf, sizeof(buf), f)) {
                 buf[strcspn(buf, "\n")] = 0; // Remove newline
                 printf("Handling delete event for directory: %s\n", buf);
-                sucess = delete_directory_tls(buf);
+                sucess = send_delete_directory(buf);
             }
         } else {
             printf("Unknown event type in file %s: %s\n", event_file_path.c_str(), buf);

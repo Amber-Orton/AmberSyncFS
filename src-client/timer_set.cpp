@@ -74,11 +74,11 @@ void* timer_set::cleanup_thread_func(void* arg) {
         cleanup_thread_run_again.store(true);
         return nullptr;
     }
-    while (cleanup_thread_run_again.exchange(false)) {
-        std::this_thread::sleep_for(std::chrono::seconds(5));
+    do {
+        std::this_thread::sleep_for(std::chrono::milliseconds(5500)); // Sleep for a bit longer than the expiration time to ensure we catch expired items
         timer_set* self = static_cast<timer_set*>(arg);
         self->cleanup();
-    }
+    } while (cleanup_thread_run_again.exchange(false));
     cleanup_thread_running.store(false);
     return nullptr;
 }
