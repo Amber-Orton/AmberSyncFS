@@ -69,8 +69,12 @@ int process_event_file(std::string event_file_path) {
         } else if (strcmp(buf, "DELETE_FILE\n") == 0) {
             if (fgets(buf, sizeof(buf), f)) {
                 buf[strcspn(buf, "\n")] = 0; // Remove newline
-                printf("Handling delete event for file: %s\n", buf);
-                sucess = send_delete_file(buf);
+                uint64_t mod_time = std::stoull(buf);
+                if (fgets(buf, sizeof(buf), f)) {
+                    buf[strcspn(buf, "\n")] = 0; // Remove newline
+                    printf("Handling delete event for directory: %s, mod_time: %llu\n", buf, (unsigned long long)mod_time);
+                    sucess = send_delete_file(buf, mod_time);
+                }
             }
         } else if (strcmp(buf, "UPLOAD_DIR\n") == 0) {
             if (fgets(buf, sizeof(buf), f)) {
@@ -81,8 +85,12 @@ int process_event_file(std::string event_file_path) {
         } else if (strcmp(buf, "DELETE_DIR\n") == 0) {
             if (fgets(buf, sizeof(buf), f)) {
                 buf[strcspn(buf, "\n")] = 0; // Remove newline
-                printf("Handling delete event for directory: %s\n", buf);
-                sucess = send_delete_directory(buf);
+                uint64_t mod_time = std::stoull(buf);
+                if (fgets(buf, sizeof(buf), f)) {
+                    buf[strcspn(buf, "\n")] = 0; // Remove newline
+                    printf("Handling delete event for directory: %s, mod_time: %llu\n", buf, (unsigned long long)mod_time);
+                    sucess = send_delete_directory(buf, mod_time);
+                }
             }
         } else {
             printf("Unknown event type in file %s: %s\n", event_file_path.c_str(), buf);
