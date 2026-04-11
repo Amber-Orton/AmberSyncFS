@@ -108,8 +108,7 @@ int send_file_tls(std::string relative_start_directory, std::string relative_fil
     }
 
     std::time_t mod_time = get_file_modification_time(file_path);
-    uint64_t mod_time_net = htobe64(mod_time);
-    if (safe_SSL_write(conn, &mod_time_net, sizeof(mod_time_net)) < 0) {
+    if (safe_SSL_write(conn, &mod_time, sizeof(mod_time)) < 0) {
         std::cerr << "Failed to send file modification time\n";
         return -1;
     }
@@ -150,8 +149,7 @@ int send_delete_file_tls(std::string relative_file_path, uint64_t mod_time, Conn
         return -1;
     }
 
-    uint64_t mod_time_net = htobe64(mod_time);
-    if (safe_SSL_write(conn, &mod_time_net, sizeof(mod_time_net)) < 0) {
+    if (safe_SSL_write(conn, &mod_time, sizeof(mod_time)) < 0) {
         std::cerr << "Failed to send file modification time\n";
         return -1;
     }
@@ -179,8 +177,7 @@ int send_directory_tls(std::string relative_start_directory, std::string relativ
 
     // get and send directory modification time
     auto mod_time = get_file_modification_time(relative_start_directory + "/" + relative_directory_path);
-    uint64_t mod_time_net = htobe64(mod_time);
-    if (safe_SSL_write(conn, &mod_time_net, sizeof(mod_time_net)) < 0) {
+    if (safe_SSL_write(conn, &mod_time, sizeof(mod_time)) < 0) {
         std::cerr << "Failed to send directory modification time\n";
         return -1;
     }
@@ -206,8 +203,7 @@ int send_delete_directory_tls(std::string relative_directory_path, uint64_t mod_
         return -1;
     }
 
-    uint64_t mod_time_net = htobe64(mod_time);
-    if (safe_SSL_write(conn, &mod_time_net, sizeof(mod_time_net)) < 0) {
+    if (safe_SSL_write(conn, &mod_time, sizeof(mod_time)) < 0) {
         std::cerr << "Failed to send directory modification time\n";
         return -1;
     }
@@ -239,12 +235,11 @@ int receive_file_tls(std::string relative_directory_path, Connection* conn) {
     std::cout << "[DEBUG] Read file name: '" << filename << "' (" << n2 << " bytes)\n" << std::flush;
 
     // read and check file modification time
-    uint64_t mod_time_net = 0;
-    if (safe_SSL_read(conn, &mod_time_net, sizeof(mod_time_net)) < 0) {
+    uint64_t mod_time = 0;
+    if (safe_SSL_read(conn, &mod_time, sizeof(mod_time)) < 0) {
         std::cerr << "Failed to read file modification time\n" << std::flush;
         return -1;
     }
-    uint64_t mod_time = be64toh(mod_time_net);
     auto current_mod_time = get_file_modification_time(relative_directory_path + "/" + filename);
     if (mod_time <= current_mod_time) {
         std::cerr << "Received file is not newer than existing file. Skipping update for '" << filename << "'\n" << std::flush;
@@ -321,12 +316,12 @@ int receive_delete_file_tls(std::string relative_directory_path, Connection* con
     }
 
     // compare modification time
-    uint64_t mod_time_net = 0;
-    if (safe_SSL_read(conn, &mod_time_net, sizeof(mod_time_net)) < 0) {
+    uint64_t mod_time = 0;
+    if (safe_SSL_read(conn, &mod_time, sizeof(mod_time)) < 0) {
         std::cerr << "Failed to read file modification time for deletion\n" << std::flush;
         return -1;
     }
-    uint64_t mod_time = be64toh(mod_time_net);
+
     auto current_mod_time = get_file_modification_time(file_path.string());
     if (mod_time <= current_mod_time) {
         std::cerr << "Received delete command is not newer than existing file. Skipping deletion for '" << filename << "'\n" << std::flush;
@@ -367,12 +362,11 @@ int receive_directory_tls(std::string relative_directory_path, Connection* conn)
     std::cout << "[DEBUG] Read directory name: '" << dirname << "' (" << n2 << " bytes)\n" << std::flush;
 
     // read and check directory modification time
-    uint64_t mod_time_net = 0;
-    if (safe_SSL_read(conn, &mod_time_net, sizeof(mod_time_net)) < 0) {
+    uint64_t mod_time = 0;
+    if (safe_SSL_read(conn, &mod_time, sizeof(mod_time)) < 0) {
         std::cerr << "Failed to read directory modification time\n" << std::flush;
         return -1;
     }
-    uint64_t mod_time = be64toh(mod_time_net);
     auto current_mod_time = get_file_modification_time(relative_directory_path + "/" + dirname);
     if (mod_time <= current_mod_time) {
         std::cerr << "Received directory is not newer than existing directory. Skipping update for '" << dirname << "'\n" << std::flush;
@@ -410,12 +404,11 @@ int receive_delete_directory_tls(std::string relative_directory_path, Connection
     std::cout << "[DEBUG] Read directory name: '" << dirname << "' (" << n2 << " bytes)\n" << std::flush;
 
     // read and check directory modification time
-    uint64_t mod_time_net = 0;
-    if (safe_SSL_read(conn, &mod_time_net, sizeof(mod_time_net)) < 0) {
+    uint64_t mod_time = 0;
+    if (safe_SSL_read(conn, &mod_time, sizeof(mod_time)) < 0) {
         std::cerr << "Failed to read directory modification time\n" << std::flush;
         return -1;
     }
-    uint64_t mod_time = be64toh(mod_time_net);
     auto current_mod_time = get_file_modification_time(relative_directory_path + "/" + dirname);
     if (mod_time <= current_mod_time) {
         std::cerr << "Received delete command is not newer than existing directory. Skipping deletion for '" << dirname << "'\n" << std::flush;
