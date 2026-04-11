@@ -113,6 +113,12 @@ int send_file_tls(std::string relative_start_directory, std::string relative_fil
         return -1;
     }
 
+    uint64_t file_size = std::filesystem::file_size(file_path);
+    if (safe_SSL_write(conn, &file_size, sizeof(file_size)) < 0) {
+        std::cerr << "Failed to send file size\n";
+        return -1;
+    }
+
     // Send file data
     char buffer[4096];
     while (file) {
@@ -251,6 +257,14 @@ int receive_file_tls(std::string relative_directory_path, Connection* conn) {
         return 1; // Not an error, just no update needed
     }
 
+    // read file size
+    uint64_t bits_left = 0;
+    if (safe_SSL_read(conn, &bits_left, sizeof(bits_left)) < 0) {
+        std::cerr << "Failed to read file size\n" << std::flush;
+        return -1;
+    }
+
+    // Open file for writing
     std::filesystem::path output_path(relative_directory_path);
     output_path.append(filename);
     std::ofstream outfile(output_path, std::ios::binary);
@@ -258,11 +272,14 @@ int receive_file_tls(std::string relative_directory_path, Connection* conn) {
         std::cerr << "Failed to open file for writing: " << filename << "\n" << std::flush;
         return -1;
     }
+
+    // Read file data
     std::cout << "Receiving file: '" << filename << "'..." << std::endl << std::flush;
-    char buffer[4096];
+    char buffer[4096]; // Use smaller buffer if file is smaller than 4KB
     int bytes;
     size_t total_bytes = 0;
-    while ((bytes = safe_SSL_read(conn, buffer, sizeof(buffer))) > 0) {
+    int bits_to_read = (bits_left < sizeof(buffer)) ? bits_left : sizeof(buffer);
+    while ((bytes = safe_SSL_read(conn, buffer, bits_to_read)) > 0) {
         if (bytes < 0) {
             std::cerr << "Error reading file data\n" << std::flush;
             outfile.close();
@@ -270,6 +287,11 @@ int receive_file_tls(std::string relative_directory_path, Connection* conn) {
         }
         outfile.write(buffer, bytes);
         total_bytes += bytes;
+        bits_left -= bytes;
+        if (bits_left == 0) {
+            break; // Finished reading file
+        }
+        bits_to_read = (bits_left < sizeof(buffer)) ? bits_left : sizeof(buffer);
     }
     std::cout << "Received file: '" << filename << "' (" << total_bytes << " bytes)" << std::endl << std::flush;
     
