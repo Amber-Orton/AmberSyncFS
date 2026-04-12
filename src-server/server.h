@@ -9,6 +9,7 @@
 extern int port;
 
 void shutdown_ssl(SSL* ssl);
+int start_of_connection(Connection* conn);
 void close_connection(Connection* conn);
 void end_of_connection(Connection* conn);
 

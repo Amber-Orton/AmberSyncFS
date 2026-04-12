@@ -99,6 +99,22 @@ int main(int argc, char *argv[]) {
             continue;
         }
 
+        // read client name length and name
+        u_int32_t client_name_len = 0;
+        if (safe_SSL_read(conn, &client_name_len, sizeof(client_name_len)) <= 0) {
+            std::cerr << "Failed to read client name length\n";
+            close_connection(conn);
+            continue;
+        }
+        char client_name_ch[client_name_len + 1];
+        if (safe_SSL_read(conn, client_name_ch, client_name_len) <= 0) {
+            std::cerr << "Failed to read client name\n";
+            close_connection(conn);
+            continue;
+        }
+        client_name_ch[client_name_len] = '\0'; // Null-terminate the client name
+        std::cout << "Client connected with name: " << client_name_ch << "\n";
+        std::string client_name = std::string(client_name_ch);
 
         // Read command from client
         char command[2];
