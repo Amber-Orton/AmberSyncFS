@@ -18,6 +18,4 @@ int receive_file_tls(std::string relative_start_directory, Connection* conn);
 int receive_delete_file_tls(std::string relative_start_directory, Connection* conn);
 int receive_directory_tls(std::string relative_start_directory, Connection* conn);
 int receive_delete_directory_tls(std::string relative_start_directory, Connection* conn);
-int safe_SSL_write(Connection* conn, const void* buf, int num);
-int safe_SSL_read(Connection* conn, void* buf, int num);
 int handle_incoming_command(Connection* conn, std::string relative_start_directory);
