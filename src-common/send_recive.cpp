@@ -45,7 +45,6 @@ int set_file_modification_time(const std::string& file_path, uint64_t mod_time) 
     return 0;
 }
 
-
 int safe_SSL_write(Connection* conn, const void* buf, int num) {
     int total_written = 0;
     while (total_written < num) {
@@ -79,7 +78,6 @@ int safe_SSL_read(Connection* conn, void* buf, int num) {
     }
     return total_read; // indicate success and return total bytes read
 }
-
 
 int send_file_tls(std::string relative_start_directory, std::string relative_file_path, Connection* conn) {
     // Open file
@@ -440,4 +438,55 @@ int receive_delete_directory_tls(std::string relative_directory_path, Connection
     std::filesystem::remove_all(relative_directory_path + "/" + dirname);
     
     return 0;
+}
+
+int handle_incoming_command(Connection* conn, std::string relative_start_directory) {
+    // Read command from client
+    char command[2];
+    int bytes_read = safe_SSL_read(conn, command, sizeof(command)); // Read command type (e.g., "UP" for upload)
+    if (bytes_read <= 0) {
+        std::cerr << "Failed to read command from client\n";
+        return -1;
+    }
+
+
+    // Handle command, its the programmers responsibility to ensure that commands are all distinct and of a fixed length
+    // each in a thread, allows infinite clients to connect and send commands without blocking each other
+    // means can be DOSed by opening many connections and sending commands without closing them but clients are certified and assumed to be non-malicious
+    if (std::strncmp(command, "UF", 2) == 0) {
+        std::cout << "Received upload command from client\n";
+        if (receive_file_tls(relative_start_directory, conn) < 0) {
+            std::cerr << "Failed to receive file\n";
+            return -1;
+        } else {
+            return 0;
+        }
+    } else if (std::strncmp(command, "DF", 2) == 0) {
+        std::cout << "Received delete command from client\n";
+        if (receive_delete_file_tls(relative_start_directory, conn) < 0) {
+            std::cerr << "Failed to delete file\n";
+            return -1;
+        } else {
+            return 0;
+        }
+    } else if (std::strncmp(command, "UD", 2) == 0) {
+        std::cout << "Received upload directory command from client\n";
+        if (receive_directory_tls(relative_start_directory, conn) < 0) {
+            std::cerr << "Failed to receive directory\n";
+            return -1;
+        } else {
+            return 0;
+        }
+    } else if (std::strncmp(command, "DD", 2) == 0) {
+        std::cout << "Received delete directory command from client\n";
+        if (receive_delete_directory_tls(relative_start_directory, conn) < 0) {
+            std::cerr << "Failed to delete directory\n";
+            return -1;
+        } else {
+            return 0;
+        }
+    } else {
+        std::cerr << "Unknown command received from client: " << std::string(command, 2) << "\n";
+        return -1;
+    }
 }

@@ -30,16 +30,17 @@ void ensure_dir(const std::string& path) {
 }
 
 int main(int argc, char *argv[]) {
-	if (argc != 5) {
-		fprintf(stderr, "Usage: %s <device_name> <server_ip> <server_port> <directory>\n", argv[0]);
+	if (argc != 6) {
+		fprintf(stderr, "Usage: %s <device_name> <server_ip> <server_port> <num_threads> <directory>\n", argv[0]);
 		return 1;
 	}
-	printf("Starting AmberSyncFS client with device: %s, server IP: %s, server port: %s, tracking directory: %s\n", argv[1], argv[2], argv[3], argv[4]);
+	printf("Starting AmberSyncFS client with device: %s, server IP: %s, server port: %s, num_threads: %s, tracking directory: %s\n", argv[1], argv[2], argv[3], argv[4], argv[5]);
 	device_name = argv[1];
 	server_ip = argv[2];
 	server_port = std::stoi(argv[3]);
-	track_root = argv[4];
-	
+	unsigned int num_threads = std::stoi(argv[4]);
+	track_root = argv[5];
+
 	// Ensure event directories exist
 	ensure_dir(event_dir);
 	ensure_dir(event_dir + "/in_creation");
@@ -66,9 +67,11 @@ int main(int argc, char *argv[]) {
 
 	
 	// Initialize the event semaphore with the number of hardware threads (or 4 if unknown)
-	auto num_threads = std::thread::hardware_concurrency();
-	if (num_threads == 0) {
-		num_threads = 4; // Default to 4 if hardware_concurrency can't determine
+	auto max_num_threads = std::thread::hardware_concurrency();
+	if (max_num_threads > 0) {
+		num_threads = std::min(num_threads, max_num_threads);
+	} else {
+		num_threads = std::max(num_threads, 1u);
 	}
 
 	

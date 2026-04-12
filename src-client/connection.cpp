@@ -276,6 +276,7 @@ int start_of_connection(Connection* conn) {
 }
 
 void end_of_connection(Connection* conn) {
+    if (!conn) return;
     close_connection(conn);
 }
 

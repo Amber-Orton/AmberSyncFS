@@ -116,64 +116,15 @@ int main(int argc, char *argv[]) {
         std::cout << "Client connected with name: " << client_name_ch << "\n";
         std::string client_name = std::string(client_name_ch);
 
-        // Read command from client
-        char command[2];
-        int bytes_read = safe_SSL_read(conn, command, sizeof(command)); // Read command type (e.g., "UP" for upload)
-        if (bytes_read <= 0) {
-            std::cerr << "Failed to read command from client\n";
-            close_connection(conn);
-            continue;
-        }
-
-
-        // Handle command, its the programmers responsibility to ensure that commands are all distinct and of a fixed length
-        // each in a thread, allows infinite clients to connect and send commands without blocking each other
-        // means can be DOSed by opening many connections and sending commands without closing them but clients are certified and assumed to be non-malicious
-        if (std::strncmp(command, "UF", 2) == 0) {
-            std::cout << "Received upload command from client\n";
-            std::thread([directory, conn]() {
-                if (receive_file_tls(directory, conn) < 0) {
-                    std::cerr << "Failed to receive file\n";
-                    close_connection(conn);
-                } else {
-                    end_of_connection(conn);
-                }
-            }).detach();
-        } else if (std::strncmp(command, "DF", 2) == 0) {
-            std::cout << "Received delete command from client\n";
-            std::thread([directory, conn]() {
-                if (receive_delete_file_tls(directory, conn) < 0) {
-                    std::cerr << "Failed to delete file\n";
-                    close_connection(conn);
-                } else {
-                    end_of_connection(conn);
-                }
-            }).detach();
-        } else if (std::strncmp(command, "UD", 2) == 0) {
-            std::cout << "Received upload directory command from client\n";
-            std::thread([directory, conn]() {
-                if (receive_directory_tls(directory, conn) < 0) {
-                    std::cerr << "Failed to receive directory\n";
-                    close_connection(conn);
-                } else {
-                    end_of_connection(conn);
-                }
-            }).detach();
-        } else if (std::strncmp(command, "DD", 2) == 0) {
-            std::cout << "Received delete directory command from client\n";
-            std::thread([directory, conn]() {
-                if (receive_delete_directory_tls(directory, conn) < 0) {
-                    std::cerr << "Failed to delete directory\n";
-                    close_connection(conn);
-                } else {
-                    end_of_connection(conn);
-                }
-            }).detach();
-        } else {
-            std::cerr << "Unknown command received from client: " << std::string(command, 2) << "\n";
-            close_connection(conn);
-            continue;
-        }
+        std::thread([directory, conn, client_name]() {
+            if (handle_incoming_command(conn, directory) < 0) {
+                std::cerr << "Error handling incoming command from client: " << client_name << "\n";
+                close_connection(conn);
+            } else {
+                std::cout << "Successfully handled incoming command from client: " << client_name << "\n";
+                end_of_connection(conn);
+            }
+        }).detach();
     }
     SSL_CTX_free(ctx);
     close(server_fd);
