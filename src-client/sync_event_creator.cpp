@@ -7,7 +7,6 @@
 #include <stdlib.h>
 #include <iostream>
 #include <unistd.h>
-#include "../src-common/main.h"
 
 
 void upload_file(const std::string& relative_path) {
@@ -51,7 +50,7 @@ void delete_directory(const std::string& relative_path) {
 int create_event_file(const std::string& event_type, const std::string& relative_path) {
     unsigned long event_num = event_counter.fetch_add(1, std::memory_order_relaxed);
     char filename_template[512];
-    snprintf(filename_template, sizeof(filename_template), "%s/in_creation/event_XXXXXX", data_dir.c_str());
+    snprintf(filename_template, sizeof(filename_template), "%s/in_creation/event_XXXXXX", event_dir.c_str());
     int fd = mkstemp(filename_template);
     if (fd < 0) {
         std::cerr << "Failed to create temp event file\n";
@@ -69,7 +68,7 @@ int create_event_file(const std::string& event_type, const std::string& relative
     fclose(event_file);
     
     char final_filename[512];
-    snprintf(final_filename, sizeof(final_filename), "%s/ready/event_%lu", data_dir.c_str(), event_num);
+    snprintf(final_filename, sizeof(final_filename), "%s/ready/event_%lu", event_dir.c_str(), event_num);
     rename(filename_template, final_filename);
     return 0;
 }

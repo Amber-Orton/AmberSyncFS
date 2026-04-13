@@ -7,7 +7,6 @@
 #include "connection.h"
 #include <thread>
 #include <semaphore>
-#include "../src-common/main.h"
 
 
 
@@ -15,7 +14,7 @@
 // hande the events created by the sync_event_creator for priority events.
 // This function continuously monitors the ready directory for event files, processes them, and then deletes the event files.
 void handle_events() {
-    std::string ready_event_dir = data_dir + "/ready";
+    std::string ready_event_dir = event_dir + "/ready";
     while (true) {
         DIR* dir = opendir(ready_event_dir.c_str());
         if (dir) {
@@ -25,7 +24,7 @@ void handle_events() {
                     std::string event_file_path = ready_event_dir + "/" + entry->d_name;
                     
                     // Move the event file to processing directory to indicate it's being processed
-                    std::string processing_file_path = data_dir + "/processing/" + entry->d_name;
+                    std::string processing_file_path = event_dir + "/processing/" + entry->d_name;
                     if (rename(event_file_path.c_str(), processing_file_path.c_str()) != 0) {
                         continue; // If we fail to move the file, skip processing it to avoid conflicts with other threads
                     }
