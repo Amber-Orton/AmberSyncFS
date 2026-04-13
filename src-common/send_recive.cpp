@@ -206,9 +206,24 @@ int receive_file_tls(std::string relative_directory_path, Connection* conn) {
     // Open file for writing
     std::filesystem::path output_path(relative_directory_path);
     output_path.append(filename);
+
+    auto old_exists = std::filesystem::exists(output_path);
+    if (old_exists) {
+        if (rename(output_path.string().c_str(), (output_path.string() + ".tmp").c_str()) < 0) {
+            if (errno != ENOENT) { // If the file doesn't exist, that's fine, we will create it. But if rename fails for another reason, we should report it.
+                std::cerr << "Failed to rename existing file to temporary name for safe writing: " << strerror(errno) << "\n" << std::flush;
+                return -1;
+            }
+        }
+    }
+
     std::ofstream outfile(output_path, std::ios::binary);
     if (!outfile) {
         std::cerr << "Failed to open file for writing: " << filename << "\n" << std::flush;
+        if (old_exists) {
+            // Try to restore old file from temporary name if we failed to open new file for writing
+            rename((output_path.string() + ".tmp").c_str(), output_path.string().c_str());
+        }
         return -1;
     }
 
@@ -222,6 +237,10 @@ int receive_file_tls(std::string relative_directory_path, Connection* conn) {
         if (bytes < 0) {
             std::cerr << "Error reading file data\n" << std::flush;
             outfile.close();
+            std::filesystem::remove(output_path); // Remove incomplete file
+            if (old_exists) {
+                rename((output_path.string() + ".tmp").c_str(), output_path.string().c_str());
+            }
             return -1;
         }
         outfile.write(buffer, bytes);
@@ -241,6 +260,9 @@ int receive_file_tls(std::string relative_directory_path, Connection* conn) {
         std::cerr << "Failed to set file modification time for '" << filename << " resetting to 0'\n" << std::flush;
         if (set_file_modification_time(output_path.string(), 0) < 0) {
             std::cerr << "Failed to reset file modification time for '" << filename << "'\n" << std::flush;
+        }
+        if (old_exists) {
+            rename((output_path.string() + ".tmp").c_str(), output_path.string().c_str());
         }
         return -1;
     }
