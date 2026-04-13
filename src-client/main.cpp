@@ -12,6 +12,7 @@
 #include <iostream>
 #include <dirent.h>
 #include <cstring>
+#include "../src-common/main.h"
 
 
 
@@ -20,7 +21,6 @@ std::string server_ip;
 int server_port = 0;
 std::string track_root;
 std::atomic_ulong event_counter{0};
-const std::string event_dir = "/tmp/ambersyncfs_events";
 
 void ensure_dir(const std::string& path) {
 	if (mkdir(path.c_str(), 0777) && errno != EEXIST) {
@@ -42,19 +42,19 @@ int main(int argc, char *argv[]) {
 	track_root = argv[5];
 
 	// Ensure event directories exist
-	ensure_dir(event_dir);
-	ensure_dir(event_dir + "/in_creation");
-	ensure_dir(event_dir + "/ready");
-	ensure_dir(event_dir + "/processing");
+	ensure_dir(data_dir);
+	ensure_dir(data_dir + "/in_creation");
+	ensure_dir(data_dir + "/ready");
+	ensure_dir(data_dir + "/processing");
 
 	// move all non finished events back to ready on startup
-	DIR* dir = opendir((event_dir + "/processing").c_str());
+	DIR* dir = opendir((data_dir + "/processing").c_str());
 	if (dir) {
 		struct dirent* entry;
 		while ((entry = readdir(dir)) != nullptr) {
 			if (strcmp(entry->d_name, ".") && strcmp(entry->d_name, "..")) {
-				std::string processing_file_path = event_dir + "/processing/" + entry->d_name;
-				std::string ready_file_path = event_dir + "/ready/" + entry->d_name;
+				std::string processing_file_path = data_dir + "/processing/" + entry->d_name;
+				std::string ready_file_path = data_dir + "/ready/" + entry->d_name;
 				if (rename(processing_file_path.c_str(), ready_file_path.c_str()) != 0) {
 					std::cerr << "Failed to move event file from processing to ready on startup: " << processing_file_path << "\n";
 				}
@@ -62,7 +62,7 @@ int main(int argc, char *argv[]) {
 		}
 		closedir(dir);
 	} else {
-		std::cerr << "Failed to open processing event directory on startup: " << (event_dir + "/processing").c_str() << "\n";
+		std::cerr << "Failed to open processing event directory on startup: " << (data_dir + "/processing").c_str() << "\n";
 	}
 
 	
