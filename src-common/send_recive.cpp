@@ -156,7 +156,7 @@ int send_delete_directory_tls(std::string relative_directory_path, uint64_t mod_
     return 0;
 }
 
-int receive_file_tls(std::string relative_directory_path, Connection* conn) {
+int receive_file_tls(std::string relative_directory_path, Connection* conn, Command* out_command) {
     // read file name length and name
     uint32_t name_len = 0;
     int n1 = safe_SSL_read(conn, &name_len, sizeof(name_len));
@@ -206,6 +206,11 @@ int receive_file_tls(std::string relative_directory_path, Connection* conn) {
     // Open file for writing
     std::filesystem::path output_path(relative_directory_path);
     output_path.append(filename);
+
+    // update out_command
+    if (out_command) {
+        out_command->path = filename;
+    }
 
     auto old_exists = std::filesystem::exists(output_path);
     if (old_exists) {
@@ -269,7 +274,7 @@ int receive_file_tls(std::string relative_directory_path, Connection* conn) {
     return 0;
 }
 
-int receive_delete_file_tls(std::string relative_directory_path, Connection* conn) {
+int receive_delete_file_tls(std::string relative_directory_path, Connection* conn, Command* out_command) {
     uint32_t name_len = 0;
     int n1 = safe_SSL_read(conn, &name_len, sizeof(name_len));
     if (n1 <= 0) {
@@ -298,6 +303,11 @@ int receive_delete_file_tls(std::string relative_directory_path, Connection* con
         return -1;
     }
 
+    // update out_command
+    if (out_command) {
+        out_command->path = filename;
+    }
+
     // compare modification time
     uint64_t mod_time = 0;
     if (safe_SSL_read(conn, &mod_time, sizeof(mod_time)) < 0) {
@@ -322,7 +332,7 @@ int receive_delete_file_tls(std::string relative_directory_path, Connection* con
     }
 }
 
-int receive_directory_tls(std::string relative_directory_path, Connection* conn) {
+int receive_directory_tls(std::string relative_directory_path, Connection* conn, Command* out_command) {
     uint32_t name_len = 0;
     int n1 = safe_SSL_read(conn, &name_len, sizeof(name_len));
     if (n1 <= 0) {
@@ -344,6 +354,11 @@ int receive_directory_tls(std::string relative_directory_path, Connection* conn)
     }
     std::cout << "[DEBUG] Read directory name: '" << dirname << "' (" << n2 << " bytes)\n" << std::flush;
 
+    // update out_command
+    if (out_command) {
+        out_command->path = dirname;
+    }
+
     // read and check directory modification time
     uint64_t mod_time = 0;
     if (safe_SSL_read(conn, &mod_time, sizeof(mod_time)) < 0) {
@@ -364,7 +379,7 @@ int receive_directory_tls(std::string relative_directory_path, Connection* conn)
     return 0;
 }
 
-int receive_delete_directory_tls(std::string relative_directory_path, Connection* conn) {
+int receive_delete_directory_tls(std::string relative_directory_path, Connection* conn, Command* out_command) {
         uint32_t name_len = 0;
     int n1 = safe_SSL_read(conn, &name_len, sizeof(name_len));
     if (n1 <= 0) {
@@ -386,6 +401,11 @@ int receive_delete_directory_tls(std::string relative_directory_path, Connection
     }
     std::cout << "[DEBUG] Read directory name: '" << dirname << "' (" << n2 << " bytes)\n" << std::flush;
 
+    // update out_command
+    if (out_command) {
+        out_command->path = dirname;
+    }
+
     // read and check directory modification time
     uint64_t mod_time = 0;
     if (safe_SSL_read(conn, &mod_time, sizeof(mod_time)) < 0) {
@@ -403,7 +423,7 @@ int receive_delete_directory_tls(std::string relative_directory_path, Connection
     return 0;
 }
 
-int handle_incoming_command(Connection* conn, std::string relative_start_directory) {
+int handle_incoming_command(Connection* conn, std::string relative_start_directory, Command* out_command) {
     // Read command from client
     char command[2];
     int bytes_read = safe_SSL_read(conn, command, sizeof(command)); // Read command type (e.g., "UP" for upload)
@@ -411,6 +431,7 @@ int handle_incoming_command(Connection* conn, std::string relative_start_directo
         std::cerr << "Failed to read command from client\n";
         return -1;
     }
+    out_command->type = std::string(command, 2);
 
 
     // Handle command, its the programmers responsibility to ensure that commands are all distinct and of a fixed length
@@ -418,7 +439,7 @@ int handle_incoming_command(Connection* conn, std::string relative_start_directo
     // means can be DOSed by opening many connections and sending commands without closing them but clients are certified and assumed to be non-malicious
     if (std::strncmp(command, "UF", 2) == 0) {
         std::cout << "Received upload command from client\n";
-        if (receive_file_tls(relative_start_directory, conn) < 0) {
+        if (receive_file_tls(relative_start_directory, conn, out_command) < 0) {
             std::cerr << "Failed to receive file\n";
             return -1;
         } else {
@@ -426,7 +447,7 @@ int handle_incoming_command(Connection* conn, std::string relative_start_directo
         }
     } else if (std::strncmp(command, "DF", 2) == 0) {
         std::cout << "Received delete command from client\n";
-        if (receive_delete_file_tls(relative_start_directory, conn) < 0) {
+        if (receive_delete_file_tls(relative_start_directory, conn, out_command) < 0) {
             std::cerr << "Failed to delete file\n";
             return -1;
         } else {
@@ -434,7 +455,7 @@ int handle_incoming_command(Connection* conn, std::string relative_start_directo
         }
     } else if (std::strncmp(command, "UD", 2) == 0) {
         std::cout << "Received upload directory command from client\n";
-        if (receive_directory_tls(relative_start_directory, conn) < 0) {
+        if (receive_directory_tls(relative_start_directory, conn, out_command) < 0) {
             std::cerr << "Failed to receive directory\n";
             return -1;
         } else {
@@ -442,7 +463,7 @@ int handle_incoming_command(Connection* conn, std::string relative_start_directo
         }
     } else if (std::strncmp(command, "DD", 2) == 0) {
         std::cout << "Received delete directory command from client\n";
-        if (receive_delete_directory_tls(relative_start_directory, conn) < 0) {
+        if (receive_delete_directory_tls(relative_start_directory, conn, out_command) < 0) {
             std::cerr << "Failed to delete directory\n";
             return -1;
         } else {
