@@ -431,7 +431,9 @@ int handle_incoming_command(Connection* conn, std::string relative_start_directo
         std::cerr << "Failed to read command from client\n";
         return -1;
     }
-    out_command->type = std::string(command, 2);
+    if (out_command != nullptr) {
+        out_command->type = std::string(command, 2);
+    }
 
 
     // Handle command, its the programmers responsibility to ensure that commands are all distinct and of a fixed length
