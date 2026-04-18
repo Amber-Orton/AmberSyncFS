@@ -1,3 +1,6 @@
+#ifndef DELETED_DATABASE_H
+#define DELETED_DATABASE_H
+
 #include <sqlite3.h>
 #include <string>
 #include <iostream>
@@ -17,3 +20,5 @@ uint64_t get_delete_mtime(const std::string& filename);
 
 // Close the database
 void close_db();
+
+#endif

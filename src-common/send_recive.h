@@ -1,3 +1,6 @@
+#ifndef SEND_RECIVE_H
+#define SEND_RECIVE_H
+
 #include <openssl/types.h>
 #include <string>
 
@@ -25,3 +28,5 @@ int receive_delete_file_tls(std::string relative_start_directory, Connection* co
 int receive_directory_tls(std::string relative_start_directory, Connection* conn, Command* out_command = nullptr);
 int receive_delete_directory_tls(std::string relative_start_directory, Connection* conn, Command* out_command = nullptr);
 int handle_incoming_command(Connection* conn, std::string relative_start_directory, Command* out_command = nullptr);
+
+#endif

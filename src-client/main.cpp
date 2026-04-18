@@ -21,6 +21,8 @@ std::string server_ip;
 int server_port = 0;
 std::string track_root;
 std::atomic_ulong event_counter{0};
+std::string data_dir;
+std::string event_dir;
 
 void ensure_dir(const std::string& path) {
 	if (mkdir(path.c_str(), 0777) && errno != EEXIST) {

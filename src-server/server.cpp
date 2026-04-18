@@ -1,5 +1,6 @@
 #include <iostream>
 #include <fstream>
+#include <vector>
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <unistd.h>
@@ -10,7 +11,7 @@
 #include "server.h"
 #include <filesystem>
 #include <sys/stat.h>
-#include <send_recive_helper.h>
+#include "../src-common/send_recive_helper.h"
 #include "../src-common/deleted_database.h"
 
 int port = 0;
@@ -116,15 +117,15 @@ int main(int argc, char *argv[]) {
             close_connection(conn);
             continue;
         }
-        char client_name_ch[client_name_len + 1];
-        if (safe_SSL_read(conn, client_name_ch, client_name_len) <= 0) {
+        std::vector<char> client_name_ch(client_name_len + 1);
+        if (safe_SSL_read(conn, client_name_ch.data(), client_name_len) <= 0) {
             std::cerr << "Failed to read client name\n";
             close_connection(conn);
             continue;
         }
         client_name_ch[client_name_len] = '\0'; // Null-terminate the client name
-        std::cout << "Client connected with name: " << client_name_ch << "\n";
-        std::string client_name = std::string(client_name_ch);
+        std::cout << "Client connected with name: " << client_name_ch.data() << "\n";
+        std::string client_name = std::string(client_name_ch.data());
 
         std::thread([tracked_files_directory, conn, client_name]() {
             if (handle_incoming_command(conn, tracked_files_directory) < 0) {

@@ -1,4 +1,7 @@
 
+#ifndef CONNECTION_H
+#define CONNECTION_H
+
 #include "../src-common/send_recive.h"
 
 int send_file(const std::string& relative_file_path);
@@ -12,3 +15,5 @@ int start_of_connection(Connection* conn);
 void end_of_connection(Connection* conn);
 void close_connection(Connection* conn);
 void shutdown_ssl(SSL* ssl);
+
+#endif

@@ -55,18 +55,3 @@ void close_db() {
     std::lock_guard<std::mutex> lock(db_mutex);
     if (db) sqlite3_close(db);
 }
-
-// Example usage
-int main() {
-    if (!open_db("deletes.db")) {
-        std::cerr << "Failed to open database\n";
-        return 1;
-    }
-
-    set_delete_mtime("/foo/bar.txt", 1234567890);
-    uint64_t mtime = get_delete_mtime("/foo/bar.txt");
-    std::cout << "Delete mtime: " << mtime << std::endl;
-
-    close_db();
-    return 0;
-}

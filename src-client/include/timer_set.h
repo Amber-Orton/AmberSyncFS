@@ -1,4 +1,5 @@
-#pragma once
+#ifndef TIMER_SET_H
+#define TIMER_SET_H
 
 #include <chrono>
 #include <string>
@@ -22,3 +23,5 @@ struct timer_set {
 };
 
 extern timer_set timer_set_instance;
+
+#endif

@@ -1,3 +1,6 @@
+#ifndef MAIN_H
+#define MAIN_H
+
 #include <atomic>
 #include <string>
 
@@ -9,3 +12,5 @@ extern std::string track_root;
 extern std::atomic_ulong event_counter;
 extern std::string data_dir;
 extern std::string event_dir;
+
+#endif
