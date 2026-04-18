@@ -10,14 +10,17 @@ std::mutex db_mutex;
 // Open or create the database
 bool open_db(const std::string& db_path) {
     std::lock_guard<std::mutex> lock(db_mutex);
-    return sqlite3_open(db_path.c_str(), &db) == SQLITE_OK;
-}
-
-// Create the table if it doesn't exist
-void create_table() {
-    std::lock_guard<std::mutex> lock(db_mutex);
-    const char* sql = "CREATE TABLE IF NOT EXISTS deletes (filename TEXT PRIMARY KEY, mtime INTEGER);";
-    sqlite3_exec(db, sql, nullptr, nullptr, nullptr);
+    // check if already open
+    if (db) {
+        return true;
+    }
+    auto sucess = sqlite3_open(db_path.c_str(), &db) == SQLITE_OK;
+    if (sucess) {
+        // create the table if needed
+        const char* sql = "CREATE TABLE IF NOT EXISTS deletes (filename TEXT PRIMARY KEY, mtime INTEGER);";
+        sqlite3_exec(db, sql, nullptr, nullptr, nullptr);
+    }
+    return sucess;
 }
 
 // Set or update a delete mtime
@@ -59,7 +62,6 @@ int main() {
         std::cerr << "Failed to open database\n";
         return 1;
     }
-    create_table();
 
     set_delete_mtime("/foo/bar.txt", 1234567890);
     uint64_t mtime = get_delete_mtime("/foo/bar.txt");
