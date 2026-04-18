@@ -11,13 +11,14 @@
 #include <filesystem>
 #include <sys/stat.h>
 #include <send_recive_helper.h>
+#include "../src-common/deleted_database.h"
 
 int port = 0;
 
 
 int main(int argc, char *argv[]) {
-	if (argc != 3) {
-		fprintf(stderr, "Usage: %s <port> <directory>\n", argv[0]);
+	if (argc != 4) {
+		fprintf(stderr, "Usage: %s <port> <tracked_files_directory> <data_directory>\n", argv[0]);
 		return 1;
 	}
 
@@ -29,11 +30,19 @@ int main(int argc, char *argv[]) {
         return 1;
     }
     // and check that it exists and is a directory
-    std::string directory = argv[2];
-    if (!std::filesystem::exists(directory) || !std::filesystem::is_directory(directory)) {
-        std::cerr << "Provided path is not a valid directory: " << directory << "\n";
+    std::string tracked_files_directory = argv[2];
+    if (!std::filesystem::exists(tracked_files_directory) || !std::filesystem::is_directory(tracked_files_directory)) {
+        std::cerr << "Provided path is not a valid directory: " << tracked_files_directory << "\n";
         return 1;
     }
+
+    // check data_dir and open database
+    std::string data_dir = argv[3];
+    if (!std::filesystem::exists(data_dir) || !std::filesystem::is_directory(data_dir)) {
+        std::cerr << "Provided path is not a valid directory: " << data_dir << "\n";
+        return 1;
+    }
+    open_db(data_dir + "/deleted_file_times");
 
     // 1. Initialize OpenSSL
     SSL_library_init();
@@ -117,8 +126,8 @@ int main(int argc, char *argv[]) {
         std::cout << "Client connected with name: " << client_name_ch << "\n";
         std::string client_name = std::string(client_name_ch);
 
-        std::thread([directory, conn, client_name]() {
-            if (handle_incoming_command(conn, directory) < 0) {
+        std::thread([tracked_files_directory, conn, client_name]() {
+            if (handle_incoming_command(conn, tracked_files_directory) < 0) {
                 std::cerr << "Error handling incoming command from client: " << client_name << "\n";
                 close_connection(conn);
             } else {

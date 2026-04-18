@@ -12,6 +12,7 @@
 #include <iostream>
 #include <dirent.h>
 #include <cstring>
+#include "../src-common/deleted_database.h"
 
 
 
@@ -20,7 +21,6 @@ std::string server_ip;
 int server_port = 0;
 std::string track_root;
 std::atomic_ulong event_counter{0};
-const std::string event_dir = "/tmp/ambersyncfs";
 
 void ensure_dir(const std::string& path) {
 	if (mkdir(path.c_str(), 0777) && errno != EEXIST) {
@@ -30,22 +30,28 @@ void ensure_dir(const std::string& path) {
 }
 
 int main(int argc, char *argv[]) {
-	if (argc != 6) {
-		fprintf(stderr, "Usage: %s <device_name> <server_ip> <server_port> <num_threads> <directory>\n", argv[0]);
+	if (argc != 7) {
+		fprintf(stderr, "Usage: %s <device_name> <server_ip> <server_port> <num_threads> <tracked_directory> <data_directory>\n", argv[0]);
 		return 1;
 	}
-	printf("Starting AmberSyncFS client with device: %s, server IP: %s, server port: %s, num_threads: %s, tracking directory: %s\n", argv[1], argv[2], argv[3], argv[4], argv[5]);
+	printf("Starting AmberSyncFS client with device: %s, server IP: %s, server port: %s, num_threads: %s, tracking directory: %s, data_directory: %s\n", argv[1], argv[2], argv[3], argv[4], argv[5], argv[6]);
 	device_name = argv[1];
 	server_ip = argv[2];
 	server_port = std::stoi(argv[3]);
 	unsigned int num_threads = std::stoi(argv[4]);
 	track_root = argv[5];
+	data_dir = argv[6];
+	event_dir = data_dir + "/events";
 
-	// Ensure event directories exist
+	// Ensure data directories exist
+	ensure_dir(data_dir);
 	ensure_dir(event_dir);
 	ensure_dir(event_dir + "/in_creation");
 	ensure_dir(event_dir + "/ready");
 	ensure_dir(event_dir + "/processing");
+
+	// open deleted files database
+	open_db(data_dir + "/deleted_file_times");
 
 	// move all non finished events back to ready on startup
 	DIR* dir = opendir((event_dir + "/processing").c_str());
