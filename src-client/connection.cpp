@@ -47,12 +47,12 @@ int send_file(const std::string& relative_file_path) {
     sucess = send_file_tls(track_root, relative_file_path, conn);
 
     if (sucess >= 0) {
-        end_of_connection(conn);
-        return sucess;
+        auto eoc_result = end_of_connection(conn);
+        return eoc_result != 0 ? eoc_result : sucess;
     } else {
         std::cerr << "Failed to send file\n";
-        close_connection(conn);
-        return sucess;
+        auto close_result = close_connection(conn);
+        return close_result != 0 ? close_result : sucess;
     }
 }
 
@@ -75,12 +75,12 @@ int send_delete_file(const std::string& relative_file_path, uint64_t mod_time) {
     sucess = send_delete_file_tls(relative_file_path, mod_time, conn);
 
     if (sucess >= 0) {
-        end_of_connection(conn);
-        return sucess;
+        auto eoc_result = end_of_connection(conn);
+        return eoc_result != 0 ? eoc_result : sucess;
     } else {
-        std::cerr << "Failed to send file\n";
-        close_connection(conn);
-        return sucess;
+        std::cerr << "Failed to send delete file\n";
+        auto close_result = close_connection(conn);
+        return close_result != 0 ? close_result : sucess;
     }
 }
 
@@ -103,13 +103,12 @@ int send_directory(const std::string& relative_directory_path) {
     sucess = send_directory_tls(track_root, relative_directory_path, conn);
 
     if (sucess >= 0) {
-        end_of_connection(conn);
-        return sucess;
+        auto eoc_result = end_of_connection(conn);
+        return eoc_result != 0 ? eoc_result : sucess;
     } else {
-        std::cerr << "Failed to send file\n";
-
-        close_connection(conn);
-        return sucess;
+        std::cerr << "Failed to send directory\n";
+        auto close_result = close_connection(conn);
+        return close_result != 0 ? close_result : sucess;
     }
 }
 
@@ -132,12 +131,12 @@ int send_delete_directory(const std::string& relative_directory_path, uint64_t m
     sucess = send_delete_directory_tls(relative_directory_path, mod_time, conn);
 
     if (sucess >= 0) {
-        end_of_connection(conn);
-        return sucess;
+        auto eoc_result = end_of_connection(conn);
+        return eoc_result != 0 ? eoc_result : sucess;
     } else {
-        std::cerr << "Failed to send file\n";
-        close_connection(conn);
-        return sucess;
+        std::cerr << "Failed to send delete directory\n";
+        auto close_result = close_connection(conn);
+        return close_result != 0 ? close_result : sucess;
     }
 }
 
@@ -276,24 +275,28 @@ int start_of_connection(Connection* conn) {
     return 0;
 }
 
-void end_of_connection(Connection* conn) {
-    if (!conn) return;
-    close_connection(conn);
+int end_of_connection(Connection* conn) {
+    if (!conn) return -1;
+    return close_connection(conn);
 }
 
-void close_connection(Connection* conn) {
-    if (!conn) return;
+int close_connection(Connection* conn) {
+    if (!conn) return -1;
 
-    shutdown_ssl(conn->ssl);
+    auto shutdown_result = shutdown_ssl(conn->ssl);
+    if (shutdown_result < 0) {
+        std::cerr << "Failed to shutdown SSL connection properly\n";
+    }
 
     SSL_free(conn->ssl);
     close(conn->sock);
     SSL_CTX_free(conn->ctx);
     delete conn;
+    return shutdown_result;
 }
     
 
-void shutdown_ssl(SSL* ssl) {
+int shutdown_ssl(SSL* ssl) {
     int shutdown_result;
     do {
         shutdown_result = SSL_shutdown(ssl);
@@ -301,4 +304,5 @@ void shutdown_ssl(SSL* ssl) {
             std::cerr << "SSL shutdown failed\n";
         }
     } while (shutdown_result == 0);
+    return shutdown_result;
 }

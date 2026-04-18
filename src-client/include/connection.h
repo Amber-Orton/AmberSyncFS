@@ -12,8 +12,8 @@ int send_delete_directory(const std::string& relative_directory_path, uint64_t m
 Connection* establish_connection(const std::string& server_ip, int port);
 Connection* try_establish_connection(const std::string& server_ip, int port);
 int start_of_connection(Connection* conn);
-void end_of_connection(Connection* conn);
-void close_connection(Connection* conn);
-void shutdown_ssl(SSL* ssl);
+int end_of_connection(Connection* conn);
+int close_connection(Connection* conn);
+int shutdown_ssl(SSL* ssl);
 
 #endif

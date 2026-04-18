@@ -271,6 +271,11 @@ int receive_file_tls(std::string relative_directory_path, Connection* conn, Comm
         }
         return -1;
     }
+    // everything worked remove temp file if it exists
+    if (old_exists) {
+        printf("Removing temporary file: %s\n", (output_path.string() + ".tmp").c_str());
+        std::filesystem::remove(output_path.string() + ".tmp");
+    }
     return 0;
 }
 
