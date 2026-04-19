@@ -109,25 +109,26 @@ int main(int argc, char *argv[]) {
             close(client_fd);
             continue;
         }
+        
+        std::thread([tracked_files_directory, conn]() {
+            // read client name length and name
+            u_int32_t client_name_len = 0;
+            if (safe_SSL_read(conn, &client_name_len, sizeof(client_name_len)) <= 0) {
+                std::cerr << "Failed to read client name length\n";
+                close_connection(conn);
+                return;
+            }
+            std::vector<char> client_name_ch(client_name_len + 1);
+            if (safe_SSL_read(conn, client_name_ch.data(), client_name_len) <= 0) {
+                std::cerr << "Failed to read client name\n";
+                close_connection(conn);
+                return;
+            }
+            client_name_ch[client_name_len] = '\0'; // Null-terminate the client name
+            std::cout << "Client connected with name: " << client_name_ch.data() << "\n";
+            std::string client_name = std::string(client_name_ch.data());
 
-        // read client name length and name
-        u_int32_t client_name_len = 0;
-        if (safe_SSL_read(conn, &client_name_len, sizeof(client_name_len)) <= 0) {
-            std::cerr << "Failed to read client name length\n";
-            close_connection(conn);
-            continue;
-        }
-        std::vector<char> client_name_ch(client_name_len + 1);
-        if (safe_SSL_read(conn, client_name_ch.data(), client_name_len) <= 0) {
-            std::cerr << "Failed to read client name\n";
-            close_connection(conn);
-            continue;
-        }
-        client_name_ch[client_name_len] = '\0'; // Null-terminate the client name
-        std::cout << "Client connected with name: " << client_name_ch.data() << "\n";
-        std::string client_name = std::string(client_name_ch.data());
 
-        std::thread([tracked_files_directory, conn, client_name]() {
             if (handle_incoming_command(conn, tracked_files_directory) < 0) {
                 std::cerr << "Error handling incoming command from client: " << client_name << "\n";
                 close_connection(conn);
