@@ -128,14 +128,17 @@ int main(int argc, char *argv[]) {
             std::cout << "Client connected with name: " << client_name_ch.data() << "\n";
             std::string client_name = std::string(client_name_ch.data());
 
+            Command command;
 
-            if (handle_incoming_command(conn, tracked_files_directory) < 0) {
+            if (handle_incoming_command(conn, tracked_files_directory, &command) < 0) {
                 std::cerr << "Error handling incoming command from client: " << client_name << "\n";
                 close_connection(conn);
+                return;
             } else {
                 std::cout << "Successfully handled incoming command from client: " << client_name << "\n";
                 end_of_connection(conn);
             }
+
         }).detach();
     }
     SSL_CTX_free(ctx);
@@ -151,6 +154,8 @@ void close_connection(Connection* conn) {
     shutdown_ssl(conn->ssl);
     SSL_free(conn->ssl);
     close(conn->sock);
+    SSL_CTX_free(conn->ctx);
+    delete conn;
 } 
 
 void shutdown_ssl(SSL* ssl) {
