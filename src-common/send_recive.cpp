@@ -19,6 +19,7 @@
 #include <sys/stat.h>
 #include <unistd.h>
 #include "send_recive_helper.h"
+#include "database.h"
 
 int send_file_tls(std::string relative_start_directory, std::string relative_file_path, Connection* conn) {
     // Open file
@@ -156,7 +157,7 @@ int send_delete_directory_tls(std::string relative_directory_path, uint64_t mod_
     return 0;
 }
 
-int receive_file_tls(std::string relative_directory_path, Connection* conn, Command* out_command) {
+int receive_file_tls(std::string relative_directory_path, Connection* conn, Event* out_event) {
     // read file name length and name
     uint32_t name_len = 0;
     int n1 = safe_SSL_read(conn, &name_len, sizeof(name_len));
@@ -179,12 +180,23 @@ int receive_file_tls(std::string relative_directory_path, Connection* conn, Comm
     }
     std::cout << "[DEBUG] Read file name: '" << filename << "' (" << n2 << " bytes)\n" << std::flush;
 
+    // update out_event
+    if (out_event) {
+        out_event->path = filename;
+    }
+
     // read and check file modification time
     uint64_t mod_time = 0;
     if (safe_SSL_read(conn, &mod_time, sizeof(mod_time)) < 0) {
         std::cerr << "Failed to read file modification time\n" << std::flush;
         return -1;
     }
+
+    // update out_event
+    if (out_event) {
+        out_event->timestamp = mod_time;
+    }
+
     auto current_mod_time = get_file_modification_time(relative_directory_path + "/" + filename);
     if (mod_time <= current_mod_time) {
         std::cerr << "Received file is not newer than existing file. Skipping update for '" << filename << "'\n" << std::flush;
@@ -206,11 +218,6 @@ int receive_file_tls(std::string relative_directory_path, Connection* conn, Comm
     // Open file for writing
     std::filesystem::path output_path(relative_directory_path);
     output_path.append(filename);
-
-    // update out_command
-    if (out_command) {
-        out_command->path = filename;
-    }
 
     auto old_exists = std::filesystem::exists(output_path);
     if (old_exists) {
@@ -279,7 +286,7 @@ int receive_file_tls(std::string relative_directory_path, Connection* conn, Comm
     return 0;
 }
 
-int receive_delete_file_tls(std::string relative_directory_path, Connection* conn, Command* out_command) {
+int receive_delete_file_tls(std::string relative_directory_path, Connection* conn, Event* out_event) {
     uint32_t name_len = 0;
     int n1 = safe_SSL_read(conn, &name_len, sizeof(name_len));
     if (n1 <= 0) {
@@ -303,14 +310,10 @@ int receive_delete_file_tls(std::string relative_directory_path, Connection* con
 
     std::filesystem::path file_path(relative_directory_path);
     file_path.append(filename);
-    if (!std::filesystem::exists(file_path)) {
-        std::cerr << "File to delete does not exist: " << file_path << "\n" << std::flush;
-        return -1;
-    }
 
-    // update out_command
-    if (out_command) {
-        out_command->path = filename;
+    // update out_event
+    if (out_event) {
+        out_event->path = filename;
     }
 
     // compare modification time
@@ -320,24 +323,36 @@ int receive_delete_file_tls(std::string relative_directory_path, Connection* con
         return -1;
     }
 
+    // update out_event
+    if (out_event) {
+        out_event->timestamp = mod_time;
+    }
+
     auto current_mod_time = get_file_modification_time(file_path.string());
     if (mod_time <= current_mod_time) {
         std::cerr << "Received delete command is not newer than existing file. Skipping deletion for '" << filename << "'\n" << std::flush;
         return 1; // Not an error, just no deletion needed
     }
 
-
-    try {
-        std::filesystem::remove(file_path);
-        std::cout << "Deleted file: '" << file_path.string() << "'\n" << std::flush;
-        return 0;
-    } catch (const std::filesystem::filesystem_error& e) {
-        std::cerr << "Failed to delete file: " << e.what() << "\n" << std::flush;
+    std::error_code ec;
+    bool removed = std::filesystem::remove(file_path, ec);
+    if (ec) {
+        std::cerr << "Failed to delete file: " << ec.message() << "\n" << std::flush;
         return -1;
     }
+
+    if (removed) {
+        std::cout << "Deleted file: '" << file_path.string() << "'\n" << std::flush;
+    } else {
+        std::cout << "Delete target already absent, recording delete time: '" << file_path.string() << "'\n" << std::flush;
+    }
+
+    // Record deletion time so stale uploads can be rejected later.
+    set_delete_mtime(file_path.string(), mod_time);
+    return 0;
 }
 
-int receive_directory_tls(std::string relative_directory_path, Connection* conn, Command* out_command) {
+int receive_directory_tls(std::string relative_directory_path, Connection* conn, Event* out_event) {
     uint32_t name_len = 0;
     int n1 = safe_SSL_read(conn, &name_len, sizeof(name_len));
     if (n1 <= 0) {
@@ -359,9 +374,9 @@ int receive_directory_tls(std::string relative_directory_path, Connection* conn,
     }
     std::cout << "[DEBUG] Read directory name: '" << dirname << "' (" << n2 << " bytes)\n" << std::flush;
 
-    // update out_command
-    if (out_command) {
-        out_command->path = dirname;
+    // update out_event
+    if (out_event) {
+        out_event->path = dirname;
     }
 
     // read and check directory modification time
@@ -370,22 +385,37 @@ int receive_directory_tls(std::string relative_directory_path, Connection* conn,
         std::cerr << "Failed to read directory modification time\n" << std::flush;
         return -1;
     }
+
+    // update out_event
+    if (out_event) {
+        out_event->timestamp = mod_time;
+    }
+
     auto current_mod_time = get_file_modification_time(relative_directory_path + "/" + dirname);
     if (mod_time <= current_mod_time) {
         std::cerr << "Received directory is not newer than existing directory. Skipping update for '" << dirname << "'\n" << std::flush;
         return 1; // Not an error, just no update needed
     }
 
-    if (std::filesystem::create_directories(relative_directory_path + "/" + dirname)) {
+    std::filesystem::path dir_path(relative_directory_path);
+    dir_path.append(dirname);
+
+    if (!std::filesystem::create_directories(dir_path)
+        && !std::filesystem::is_directory(dir_path)) {
         std::cerr << "Failed to create directory: " << dirname << "\n" << std::flush;
         return -1;
 	}
 
+    if (set_file_modification_time(dir_path.string(), mod_time) < 0) {
+        std::cerr << "Failed to set directory modification time for '" << dirname << "'\n" << std::flush;
+        return -1;
+    }
+
     return 0;
 }
 
-int receive_delete_directory_tls(std::string relative_directory_path, Connection* conn, Command* out_command) {
-        uint32_t name_len = 0;
+int receive_delete_directory_tls(std::string relative_directory_path, Connection* conn, Event* out_event) {
+    uint32_t name_len = 0;
     int n1 = safe_SSL_read(conn, &name_len, sizeof(name_len));
     if (n1 <= 0) {
         std::cerr << "Failed to read directory name length\n" << std::flush;
@@ -406,9 +436,9 @@ int receive_delete_directory_tls(std::string relative_directory_path, Connection
     }
     std::cout << "[DEBUG] Read directory name: '" << dirname << "' (" << n2 << " bytes)\n" << std::flush;
 
-    // update out_command
-    if (out_command) {
-        out_command->path = dirname;
+    // update out_event
+    if (out_event) {
+        out_event->path = dirname;
     }
 
     // read and check directory modification time
@@ -417,18 +447,41 @@ int receive_delete_directory_tls(std::string relative_directory_path, Connection
         std::cerr << "Failed to read directory modification time\n" << std::flush;
         return -1;
     }
-    auto current_mod_time = get_file_modification_time(relative_directory_path + "/" + dirname);
+
+    // update out_event
+    if (out_event) {
+        out_event->timestamp = mod_time;
+    }
+
+    std::filesystem::path dir_path(relative_directory_path);
+    dir_path.append(dirname);
+
+    auto current_mod_time = get_file_modification_time(dir_path.string());
     if (mod_time <= current_mod_time) {
         std::cerr << "Received delete command is not newer than existing directory. Skipping deletion for '" << dirname << "'\n" << std::flush;
         return 1; // Not an error, just no deletion needed
     }
 
-    std::filesystem::remove_all(relative_directory_path + "/" + dirname);
-    
+    std::error_code ec;
+    auto removed_count = std::filesystem::remove_all(dir_path, ec);
+    if (ec) {
+        std::cerr << "Failed to delete directory: " << ec.message() << "\n" << std::flush;
+        return -1;
+    }
+
+    if (removed_count > 0) {
+        std::cout << "Deleted directory: '" << dir_path.string() << "'\n" << std::flush;
+    } else {
+        std::cout << "Delete target already absent, recording delete time: '" << dir_path.string() << "'\n" << std::flush;
+    }
+
+    // Record deletion time so stale updates can be rejected later.
+    set_delete_mtime(dir_path.string(), mod_time);
+
     return 0;
 }
 
-int handle_incoming_command(Connection* conn, std::string relative_start_directory, Command* out_command) {
+int handle_incoming_event(Connection* conn, std::string relative_start_directory, Event* out_event) {
     // Read command from client
     char command[2];
     int bytes_read = safe_SSL_read(conn, command, sizeof(command)); // Read command type (e.g., "UP" for upload)
@@ -436,8 +489,8 @@ int handle_incoming_command(Connection* conn, std::string relative_start_directo
         std::cerr << "Failed to read command from client\n";
         return -1;
     }
-    if (out_command != nullptr) {
-        out_command->type = std::string(command, 2);
+    if (out_event != nullptr) {
+        out_event->type = std::string(command, 2);
     }
 
 
@@ -446,7 +499,7 @@ int handle_incoming_command(Connection* conn, std::string relative_start_directo
     // means can be DOSed by opening many connections and sending commands without closing them but clients are certified and assumed to be non-malicious
     if (std::strncmp(command, "UF", 2) == 0) {
         std::cout << "Received upload command from client\n";
-        if (receive_file_tls(relative_start_directory, conn, out_command) < 0) {
+        if (receive_file_tls(relative_start_directory, conn, out_event) < 0) {
             std::cerr << "Failed to receive file\n";
             return -1;
         } else {
@@ -454,7 +507,7 @@ int handle_incoming_command(Connection* conn, std::string relative_start_directo
         }
     } else if (std::strncmp(command, "DF", 2) == 0) {
         std::cout << "Received delete command from client\n";
-        if (receive_delete_file_tls(relative_start_directory, conn, out_command) < 0) {
+        if (receive_delete_file_tls(relative_start_directory, conn, out_event) < 0) {
             std::cerr << "Failed to delete file\n";
             return -1;
         } else {
@@ -462,7 +515,7 @@ int handle_incoming_command(Connection* conn, std::string relative_start_directo
         }
     } else if (std::strncmp(command, "UD", 2) == 0) {
         std::cout << "Received upload directory command from client\n";
-        if (receive_directory_tls(relative_start_directory, conn, out_command) < 0) {
+        if (receive_directory_tls(relative_start_directory, conn, out_event) < 0) {
             std::cerr << "Failed to receive directory\n";
             return -1;
         } else {
@@ -470,7 +523,7 @@ int handle_incoming_command(Connection* conn, std::string relative_start_directo
         }
     } else if (std::strncmp(command, "DD", 2) == 0) {
         std::cout << "Received delete directory command from client\n";
-        if (receive_delete_directory_tls(relative_start_directory, conn, out_command) < 0) {
+        if (receive_delete_directory_tls(relative_start_directory, conn, out_event) < 0) {
             std::cerr << "Failed to delete directory\n";
             return -1;
         } else {

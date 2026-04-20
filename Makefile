@@ -17,15 +17,15 @@ SRC_CLIENT_DIR = src-client
 
 # Server
 SERVER_TARGET = server
-SERVER_SRC = $(SRC_SERVER_DIR)/server.cpp src-common/send_recive.cpp src-common/send_recive_helper.cpp src-common/deleted_database.cpp
-SERVER_OBJ = $(BUILD_DIR)/server.o $(BUILD_DIR)/send_recive_common.o $(BUILD_DIR)/send_recive_helper.o $(BUILD_DIR)/deleted_database.o
+SERVER_SRC = $(SRC_SERVER_DIR)/server.cpp src-common/send_recive.cpp src-common/send_recive_helper.cpp src-common/database.cpp
+SERVER_OBJ = $(BUILD_DIR)/server.o $(BUILD_DIR)/send_recive_common.o $(BUILD_DIR)/send_recive_helper.o $(BUILD_DIR)/database.o
 
 
 
 # Client
 CLIENT_TARGET = client
 CLIENT_SRC = $(wildcard $(SRC_CLIENT_DIR)/*.cpp)
-CLIENT_OBJ = $(patsubst $(SRC_CLIENT_DIR)/%.cpp,$(BUILD_DIR)/%.o,$(CLIENT_SRC)) $(BUILD_DIR)/send_recive_common.o $(BUILD_DIR)/send_recive_helper.o $(BUILD_DIR)/deleted_database.o
+CLIENT_OBJ = $(patsubst $(SRC_CLIENT_DIR)/%.cpp,$(BUILD_DIR)/%.o,$(CLIENT_SRC)) $(BUILD_DIR)/send_recive_common.o $(BUILD_DIR)/send_recive_helper.o $(BUILD_DIR)/database.o
 
 
 # Default rule
@@ -60,14 +60,14 @@ $(BUILD_DIR)/send_recive_helper.o: src-common/send_recive_helper.cpp
 	mkdir -p $(BUILD_DIR)
 	$(CXX) $(CXXFLAGS) -I$(INCLUDE_DIR) -I./src-common -c $< -o $@
 
-# Rule for src-common/deleted_database.cpp
-$(BUILD_DIR)/deleted_database.o: src-common/deleted_database.cpp
+# Rule for src-common/database.cpp
+$(BUILD_DIR)/database.o: src-common/database.cpp
 	mkdir -p $(BUILD_DIR)
 	$(CXX) $(CXXFLAGS) -I$(INCLUDE_DIR) -I./src-common -c $< -o $@
 
 $(BUILD_DIR)/server.o: $(SRC_SERVER_DIR)/server.cpp
 	mkdir -p $(BUILD_DIR)
-	$(CXX) $(CXXFLAGS) -I$(INCLUDE_DIR) -c $< -o $@
+	$(CXX) $(CXXFLAGS) -I$(INCLUDE_DIR) -I./src-common -c $< -o $@
 
 
 

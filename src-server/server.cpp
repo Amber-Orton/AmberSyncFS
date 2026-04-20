@@ -5,14 +5,16 @@
 #include <netinet/in.h>
 #include <unistd.h>
 #include <cstring>
+#include <cerrno>
 #include <thread>
 #include <openssl/ssl.h>
 #include <openssl/err.h>
 #include "server.h"
 #include <filesystem>
 #include <sys/stat.h>
-#include "../src-common/send_recive_helper.h"
-#include "../src-common/deleted_database.h"
+#include <send_recive_helper.h>
+#include <database.h>
+#include <send_recive.h>
 
 int port = 0;
 
@@ -43,7 +45,11 @@ int main(int argc, char *argv[]) {
         std::cerr << "Provided path is not a valid directory: " << data_dir << "\n";
         return 1;
     }
-    open_db(data_dir + "/deleted_file_times");
+    if (!open_db(data_dir + "/deleted_file_times")) {
+        std::cerr << "Failed to initialize server database at: " << data_dir + "/deleted_file_times" << "\n";
+        return 1;
+    }
+    reset_in_progress_events(); // reset any events that were in progress
 
     // 1. Initialize OpenSSL
     SSL_library_init();
@@ -70,12 +76,39 @@ int main(int argc, char *argv[]) {
     SSL_CTX_set_verify(ctx, SSL_VERIFY_PEER | SSL_VERIFY_FAIL_IF_NO_PEER_CERT, nullptr);
 
     int server_fd = socket(AF_INET, SOCK_STREAM, 0);
+    if (server_fd < 0) {
+        std::cerr << "Failed to create server socket: " << strerror(errno) << "\n";
+        SSL_CTX_free(ctx);
+        return 1;
+    }
+
+    int reuse_addr = 1;
+    if (setsockopt(server_fd, SOL_SOCKET, SO_REUSEADDR, &reuse_addr, sizeof(reuse_addr)) < 0) {
+        std::cerr << "Failed to set SO_REUSEADDR: " << strerror(errno) << "\n";
+        close(server_fd);
+        SSL_CTX_free(ctx);
+        return 1;
+    }
+
     sockaddr_in address{};
     address.sin_family = AF_INET;
     address.sin_addr.s_addr = INADDR_ANY;
     address.sin_port = htons(port);
-    bind(server_fd, (sockaddr*)&address, sizeof(address));
-    listen(server_fd, 1);
+
+    if (bind(server_fd, (sockaddr*)&address, sizeof(address)) < 0) {
+        std::cerr << "Failed to bind server socket on port " << port << ": " << strerror(errno) << "\n";
+        close(server_fd);
+        SSL_CTX_free(ctx);
+        return 1;
+    }
+
+    if (listen(server_fd, SOMAXCONN) < 0) {
+        std::cerr << "Failed to listen on server socket: " << strerror(errno) << "\n";
+        close(server_fd);
+        SSL_CTX_free(ctx);
+        return 1;
+    }
+
     std::cout << "TLS server listening on port " << port << std::endl;
 
     while (true) {
@@ -112,7 +145,7 @@ int main(int argc, char *argv[]) {
         
         std::thread([tracked_files_directory, conn]() {
             // read client name length and name
-            u_int32_t client_name_len = 0;
+            uint32_t client_name_len = 0;
             if (safe_SSL_read(conn, &client_name_len, sizeof(client_name_len)) <= 0) {
                 std::cerr << "Failed to read client name length\n";
                 close_connection(conn);
@@ -128,14 +161,14 @@ int main(int argc, char *argv[]) {
             std::cout << "Client connected with name: " << client_name_ch.data() << "\n";
             std::string client_name = std::string(client_name_ch.data());
 
-            Command command;
+            Event event;
 
-            if (handle_incoming_command(conn, tracked_files_directory, &command) < 0) {
-                std::cerr << "Error handling incoming command from client: " << client_name << "\n";
+            if (handle_incoming_event(conn, tracked_files_directory, &event) < 0) {
+                std::cerr << "Error handling incoming event from client: " << client_name << "\n";
                 close_connection(conn);
                 return;
             } else {
-                std::cout << "Successfully handled incoming command from client: " << client_name << "\n";
+                std::cout << "Successfully handled incoming event from client: " << client_name << "\n";
                 end_of_connection(conn);
             }
 
@@ -154,7 +187,6 @@ void close_connection(Connection* conn) {
     shutdown_ssl(conn->ssl);
     SSL_free(conn->ssl);
     close(conn->sock);
-    SSL_CTX_free(conn->ctx);
     delete conn;
 } 
 

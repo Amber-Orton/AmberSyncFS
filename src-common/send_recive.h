@@ -2,14 +2,17 @@
 #define SEND_RECIVE_H
 
 #include <openssl/types.h>
+#include <cstdint>
 #include <string>
 
 
-struct command {
+struct event {
+    int id; // used for database events table (will not set id in events table), not needed for file transfer events but can be used when wanted
     std::string type;
     std::string path; // relative path from the tracked root directory
+    uint64_t timestamp;
 };
-using Command = struct command;
+using Event = struct event;
 
 
 struct connection{
@@ -23,10 +26,10 @@ int send_file_tls(std::string relative_start_directory, std::string relative_fil
 int send_delete_file_tls(std::string relative_file_path, uint64_t mod_time, Connection* conn);
 int send_directory_tls(std::string relative_start_directory, std::string relative_directory_path, Connection* conn);
 int send_delete_directory_tls(std::string relative_directory_path, uint64_t mod_time, Connection* conn);
-int receive_file_tls(std::string relative_start_directory, Connection* conn, Command* out_command = nullptr);
-int receive_delete_file_tls(std::string relative_start_directory, Connection* conn, Command* out_command = nullptr);
-int receive_directory_tls(std::string relative_start_directory, Connection* conn, Command* out_command = nullptr);
-int receive_delete_directory_tls(std::string relative_start_directory, Connection* conn, Command* out_command = nullptr);
-int handle_incoming_command(Connection* conn, std::string relative_start_directory, Command* out_command = nullptr);
+int receive_file_tls(std::string relative_start_directory, Connection* conn, Event* out_event = nullptr);
+int receive_delete_file_tls(std::string relative_start_directory, Connection* conn, Event* out_event = nullptr);
+int receive_directory_tls(std::string relative_start_directory, Connection* conn, Event* out_event = nullptr);
+int receive_delete_directory_tls(std::string relative_start_directory, Connection* conn, Event* out_event = nullptr);
+int handle_incoming_event(Connection* conn, std::string relative_start_directory, Event* out_event = nullptr);
 
 #endif

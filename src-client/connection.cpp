@@ -28,7 +28,7 @@ std::mutex connection_try_mutex;
 
 
 
-int send_file(const std::string& relative_file_path) {
+int send_file(const Event& event) {
     // Establish TLS connection
     auto* conn = try_establish_connection(server_ip, server_port);
     if (!conn) {
@@ -44,7 +44,7 @@ int send_file(const std::string& relative_file_path) {
         return sucess;
     }
 
-    sucess = send_file_tls(track_root, relative_file_path, conn);
+    sucess = send_file_tls(track_root, event.path, conn);
 
     if (sucess >= 0) {
         auto eoc_result = end_of_connection(conn);
@@ -56,7 +56,7 @@ int send_file(const std::string& relative_file_path) {
     }
 }
 
-int send_delete_file(const std::string& relative_file_path, uint64_t mod_time) {
+int send_delete_file(const Event& event) {
     // Establish TLS connection
     auto* conn = try_establish_connection(server_ip, server_port);
     if (!conn) {
@@ -72,7 +72,7 @@ int send_delete_file(const std::string& relative_file_path, uint64_t mod_time) {
         return sucess;
     }
 
-    sucess = send_delete_file_tls(relative_file_path, mod_time, conn);
+    sucess = send_delete_file_tls(event.path, event.timestamp, conn);
 
     if (sucess >= 0) {
         auto eoc_result = end_of_connection(conn);
@@ -84,7 +84,7 @@ int send_delete_file(const std::string& relative_file_path, uint64_t mod_time) {
     }
 }
 
-int send_directory(const std::string& relative_directory_path) {
+int send_directory(const Event& event) {
     // Establish TLS connection
     auto* conn = try_establish_connection(server_ip, server_port);
     if (!conn) {
@@ -100,7 +100,7 @@ int send_directory(const std::string& relative_directory_path) {
         return sucess;
     }
 
-    sucess = send_directory_tls(track_root, relative_directory_path, conn);
+    sucess = send_directory_tls(track_root, event.path, conn);
 
     if (sucess >= 0) {
         auto eoc_result = end_of_connection(conn);
@@ -112,7 +112,7 @@ int send_directory(const std::string& relative_directory_path) {
     }
 }
 
-int send_delete_directory(const std::string& relative_directory_path, uint64_t mod_time) {
+int send_delete_directory(const Event& event) {
     // Establish TLS connection
     auto* conn = try_establish_connection(server_ip, server_port);
     if (!conn) {
@@ -128,7 +128,7 @@ int send_delete_directory(const std::string& relative_directory_path, uint64_t m
         return sucess;
     }
 
-    sucess = send_delete_directory_tls(relative_directory_path, mod_time, conn);
+    sucess = send_delete_directory_tls(event.path, event.timestamp, conn);
 
     if (sucess >= 0) {
         auto eoc_result = end_of_connection(conn);
@@ -263,7 +263,7 @@ int start_of_connection(Connection* conn) {
     }
     
     // send device name length and name
-    u_int32_t name_len = device_name.size();
+    uint32_t name_len = static_cast<uint32_t>(device_name.size());
     if (safe_SSL_write(conn, &name_len, sizeof(name_len)) < 0) {
         std::cerr << "Failed to send device name length\n";
         return -1;

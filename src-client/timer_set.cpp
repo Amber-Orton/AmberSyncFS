@@ -3,6 +3,7 @@
 #include "sync_event_creator.h"
 #include <iostream>
 #include <thread>
+#include <database.h>
 
 timer_set timer_set_instance = timer_set();
 
@@ -11,7 +12,7 @@ std::atomic<bool> timer_set::cleanup_thread_run_again{false};
 
 // Checks if an element is in the set and adds it if it's not.
 // Returns 1 if present and refreshed, 0 if missing or eligible for event creation.
-int timer_set::check(const std::string& event_type, const std::string& relative_path) {
+int timer_set::check(const std::string& event_type, const std::string& relative_path, uint64_t mod_time) {
     pthread_t cleanup_thread;
     pthread_create(&cleanup_thread, nullptr, &timer_set::cleanup_thread_func, this);
     pthread_detach(cleanup_thread);
@@ -30,7 +31,7 @@ int timer_set::check(const std::string& event_type, const std::string& relative_
         return 1;
     }
 
-    myset[key] = {std::chrono::steady_clock::now(), std::chrono::steady_clock::now(), 0};
+    myset[key] = {std::chrono::steady_clock::now(), std::chrono::steady_clock::now(), mod_time, 0};
     return 0;
 }
 
@@ -42,6 +43,7 @@ void timer_set::cleanup() {
         if (elapsed > std::chrono::seconds(5)) {
             bool should_create_event = item->second.access_count >= 1;
             std::string event_key = item->first;
+            auto mod_time = item->second.mod_time;
             std::cout << "[timer_set::cleanup] Expiring key: '" << event_key << "', access_count=" << item->second.access_count << ", elapsed=" << std::chrono::duration_cast<std::chrono::seconds>(elapsed).count() << "s\n";
             item = myset.erase(item);
 
@@ -59,7 +61,7 @@ void timer_set::cleanup() {
                     continue;
                 }
                 std::cout << "[timer_set::cleanup] Creating event for expired key: type='" << event_type << "', path='" << relative_path << "'\n";
-                create_event_file(event_type, relative_path);
+                create_event(event_type, relative_path, mod_time);
             } else {
                 std::cout << "[timer_set::cleanup] Not creating event for expired key: '" << event_key << "' (access_count < 1)\n";
             }

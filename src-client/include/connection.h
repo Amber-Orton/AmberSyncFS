@@ -4,10 +4,10 @@
 
 #include "../src-common/send_recive.h"
 
-int send_file(const std::string& relative_file_path);
-int send_delete_file(const std::string& relative_file_path, uint64_t mod_time);
-int send_directory(const std::string& relative_directory_path);
-int send_delete_directory(const std::string& relative_directory_path, uint64_t mod_time);
+int send_file(const Event& event);
+int send_delete_file(const Event& event);
+int send_directory(const Event& event);
+int send_delete_directory(const Event& event);
 
 Connection* establish_connection(const std::string& server_ip, int port);
 Connection* try_establish_connection(const std::string& server_ip, int port);
