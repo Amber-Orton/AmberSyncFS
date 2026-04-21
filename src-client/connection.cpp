@@ -263,7 +263,7 @@ int start_of_connection(Connection* conn) {
     }
     
     // send device name length and name
-    uint32_t name_len = static_cast<uint32_t>(device_name.size());
+    uint32_t name_len = htonl(static_cast<uint32_t>(device_name.size()));
     if (safe_SSL_write(conn, &name_len, sizeof(name_len)) < 0) {
         std::cerr << "Failed to send device name length\n";
         return -1;

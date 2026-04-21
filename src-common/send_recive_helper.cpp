@@ -15,6 +15,24 @@
 #include "send_recive.h"
 #include "database.h"
 
+uint64_t htonll(uint64_t value) {
+    static const int endian_test = 1;
+    if (*reinterpret_cast<const char*>(&endian_test) == 1) {
+        return (static_cast<uint64_t>(htonl(static_cast<uint32_t>(value & 0xFFFFFFFFULL))) << 32)
+             | htonl(static_cast<uint32_t>(value >> 32));
+    }
+    return value;
+}
+
+uint64_t ntohll(uint64_t value) {
+    static const int endian_test = 1;
+    if (*reinterpret_cast<const char*>(&endian_test) == 1) {
+        return (static_cast<uint64_t>(ntohl(static_cast<uint32_t>(value & 0xFFFFFFFFULL))) << 32)
+             | ntohl(static_cast<uint32_t>(value >> 32));
+    }
+    return value;
+}
+
 uint64_t get_file_modification_time(const std::string& file_path) {
     std::filesystem::path full_file_path(file_path);
     // check existance

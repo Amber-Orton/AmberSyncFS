@@ -151,6 +151,7 @@ int main(int argc, char *argv[]) {
                 close_connection(conn);
                 return;
             }
+            client_name_len = ntohl(client_name_len);
             std::vector<char> client_name_ch(client_name_len + 1);
             if (safe_SSL_read(conn, client_name_ch.data(), client_name_len) <= 0) {
                 std::cerr << "Failed to read client name\n";
