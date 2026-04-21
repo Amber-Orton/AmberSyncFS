@@ -7,6 +7,7 @@
 #include <cstdint>
 #include <optional>
 #include "send_recive.h"
+#include <vector>
 
 // Open or create the database
 bool open_db(const std::string& db_path);
@@ -27,6 +28,9 @@ void remove_event(int id);
 
 // Set all in_progress events back to not in progress (e.g. on startup or after a crash)
 void reset_in_progress_events(const std::string& client_id = "");
+
+// reset a single in_progress event back to not in progress (e.g. after a failed processing attempt)
+void reset_in_progress_event(int id);
 
 // add a user to the users table
 void add_user(const std::string& username);

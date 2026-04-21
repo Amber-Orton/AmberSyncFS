@@ -37,10 +37,10 @@ void handle_events() {
                     continue;
                 }
                 if (sucess < 0) {
-                    std::cerr << "Failed to process event for path: " << event->path << ", re-adding to database\n";
-                    create_event(event->type, event->path, event->timestamp); // re-add the event to the database to retry later
+                    std::cerr << "Failed to process event: " << event->type << " for path: " << event->path << ", re-adding to database\n";
+                    reset_in_progress_event(event->id); // re-add the event to the database to retry later
                 } else {
-                    std::cout << "Successfully processed event for path: " << event->path << "\n";
+                    std::cout << "Successfully processed event: " << event->type << " for path: " << event->path << "\n";
                     remove_event(event->id); // remove the event from the database as it has been successfully processed
                 }
             } else {

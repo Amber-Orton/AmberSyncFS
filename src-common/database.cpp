@@ -132,6 +132,24 @@ void reset_in_progress_events(const std::string& client_id = "") {
     sqlite3_finalize(stmt);
 }
 
+void reset_in_progress_event(int event_id) {
+    std::lock_guard<std::mutex> lock(db_mutex);
+    if (!db) {
+        return;
+    }
+    sqlite3_stmt* stmt;
+    const char* sql = "UPDATE events SET in_progress = 0 WHERE id = ?;";
+    if (sqlite3_prepare_v2(db, sql, -1, &stmt, nullptr) != SQLITE_OK) {
+        std::cerr << "Failed to prepare reset_in_progress_event statement: " << sqlite3_errmsg(db) << "\n";
+        return;
+    }
+    sqlite3_bind_int(stmt, 1, event_id);
+    if (sqlite3_step(stmt) != SQLITE_DONE) {
+        std::cerr << "Failed to reset in_progress event with id " << event_id << ": " << sqlite3_errmsg(db) << "\n";
+    }
+    sqlite3_finalize(stmt);
+}
+
 void add_user(const std::string& username) {
     std::lock_guard<std::mutex> lock(db_mutex);
     if (!db) {
