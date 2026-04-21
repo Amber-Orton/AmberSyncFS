@@ -8,6 +8,7 @@
 
 struct event {
     int id; // used for database events table (will not set id in events table), not needed for file transfer events but can be used when wanted
+    std::string client_id;
     std::string type;
     std::string path; // relative path from the tracked root directory
     uint64_t timestamp;

@@ -162,6 +162,7 @@ int main(int argc, char *argv[]) {
             std::string client_name = std::string(client_name_ch.data());
 
             Event event;
+            event.client_id = client_name;
 
             if (handle_incoming_event(conn, tracked_files_directory, &event) < 0) {
                 std::cerr << "Error handling incoming event from client: " << client_name << "\n";
@@ -169,7 +170,7 @@ int main(int argc, char *argv[]) {
                 return;
             } else {
                 std::cout << "Successfully handled incoming event from client: " << client_name << "\n";
-                end_of_connection(conn);
+                end_of_connection(conn, event);
             }
 
         }).detach();
@@ -179,8 +180,17 @@ int main(int argc, char *argv[]) {
     return 0;
 }
 
-void end_of_connection(Connection* conn) {
+void end_of_connection(Connection* conn, Event& event) {
     close_connection(conn);
+
+    // create events for all other clients to process the changes from this client
+    auto origional_client_id = event.client_id;
+    for (std::string user : get_all_users()) {
+        if (user != origional_client_id) {
+            event.client_id = user;
+            create_event(event);
+        }
+    }
 }
 
 void close_connection(Connection* conn) {

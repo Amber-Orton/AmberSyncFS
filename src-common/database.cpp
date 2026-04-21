@@ -6,6 +6,7 @@
 #include <optional>
 #include <filesystem>
 #include "send_recive.h"
+#include <vector>
 
 sqlite3* db = nullptr;
 std::mutex db_mutex;
@@ -73,6 +74,10 @@ void create_event(const std::string& type, const std::string& payload, uint64_t 
     sqlite3_finalize(stmt);
 }
 
+void create_event(const Event& event) {
+    create_event(event.type, event.path, event.timestamp, event.client_id);
+}
+
 // retrives the next event from the events table and removes it from the table
 std::optional<Event> get_and_set_in_progress_next_event(const std::string& client_id = "") {
     std::lock_guard<std::mutex> lock(db_mutex);
@@ -91,6 +96,7 @@ std::optional<Event> get_and_set_in_progress_next_event(const std::string& clien
         int id = sqlite3_column_int(stmt, 0);
         Event row_event;
         row_event.id = id;
+        row_event.client_id = client_id;
         row_event.type = reinterpret_cast<const char*>(sqlite3_column_text(stmt, 1));
         row_event.path = reinterpret_cast<const char*>(sqlite3_column_text(stmt, 2));
         row_event.timestamp = static_cast<uint64_t>(sqlite3_column_int64(stmt, 3));
@@ -124,6 +130,44 @@ void reset_in_progress_events(const std::string& client_id = "") {
         std::cerr << "Failed to reset in_progress events: " << sqlite3_errmsg(db) << "\n";
     }
     sqlite3_finalize(stmt);
+}
+
+void add_user(const std::string& username) {
+    std::lock_guard<std::mutex> lock(db_mutex);
+    if (!db) {
+        std::cerr << "add_user called before successful open_db\n";
+        return;
+    }
+    sqlite3_stmt* stmt;
+    const char* sql = "CREATE TABLE IF NOT EXISTS users (username TEXT PRIMARY KEY); INSERT OR IGNORE INTO users (username) VALUES (?);";
+    if (sqlite3_prepare_v2(db, sql, -1, &stmt, nullptr) != SQLITE_OK) {
+        std::cerr << "Failed to prepare add_user statement: " << sqlite3_errmsg(db) << "\n";
+        return;
+    }
+    sqlite3_bind_text(stmt, 1, username.c_str(), -1, SQLITE_TRANSIENT);
+    if (sqlite3_step(stmt) != SQLITE_DONE) {
+        std::cerr << "Failed to add user: " << sqlite3_errmsg(db) << "\n";
+    }
+    sqlite3_finalize(stmt);        
+}
+
+std::vector<std::string> get_users() {
+    std::lock_guard<std::mutex> lock(db_mutex);
+    std::vector<std::string> users;
+    if (!db) {
+        return users;
+    }
+    sqlite3_stmt* stmt;
+    const char* sql = "SELECT username FROM users;";
+    if (sqlite3_prepare_v2(db, sql, -1, &stmt, nullptr) != SQLITE_OK) {
+        std::cerr << "Failed to prepare get_users statement: " << sqlite3_errmsg(db) << "\n";
+        return users;
+    }
+    while (sqlite3_step(stmt) == SQLITE_ROW) {
+        users.emplace_back(reinterpret_cast<const char*>(sqlite3_column_text(stmt, 0)));
+    }
+    sqlite3_finalize(stmt);
+    return users;
 }
 
 void remove_event(int id) {
