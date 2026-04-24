@@ -57,5 +57,7 @@ int create_event_checked(const std::string& event_type, const std::string& relat
         return 1; // Event creation not needed based on timer set check
     }
     create_event(event_type, relative_path, mod_time);
+
+    events_cv.notify_one();
     return 0;
 }

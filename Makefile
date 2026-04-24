@@ -15,17 +15,19 @@ SRC_CLIENT_DIR = src-client
 
 
 
+
 # Server
 SERVER_TARGET = server
-SERVER_SRC = $(SRC_SERVER_DIR)/server.cpp src-common/send_recive.cpp src-common/send_recive_helper.cpp src-common/database.cpp
-SERVER_OBJ = $(BUILD_DIR)/server.o $(BUILD_DIR)/send_recive_common.o $(BUILD_DIR)/send_recive_helper.o $(BUILD_DIR)/database.o
+SERVER_SRC = $(SRC_SERVER_DIR)/server.cpp src-common/send_recive.cpp src-common/send_recive_helper.cpp src-common/database.cpp src-common/file_lock.cpp
+SERVER_OBJ = $(BUILD_DIR)/server.o $(BUILD_DIR)/send_recive_common.o $(BUILD_DIR)/send_recive_helper.o $(BUILD_DIR)/database.o $(BUILD_DIR)/file_lock.o
+
 
 
 
 # Client
 CLIENT_TARGET = client
 CLIENT_SRC = $(wildcard $(SRC_CLIENT_DIR)/*.cpp)
-CLIENT_OBJ = $(patsubst $(SRC_CLIENT_DIR)/%.cpp,$(BUILD_DIR)/%.o,$(CLIENT_SRC)) $(BUILD_DIR)/send_recive_common.o $(BUILD_DIR)/send_recive_helper.o $(BUILD_DIR)/database.o
+CLIENT_OBJ = $(patsubst $(SRC_CLIENT_DIR)/%.cpp,$(BUILD_DIR)/%.o,$(CLIENT_SRC)) $(BUILD_DIR)/send_recive_common.o $(BUILD_DIR)/send_recive_helper.o $(BUILD_DIR)/database.o $(BUILD_DIR)/file_lock.o
 
 
 # Default rule
@@ -55,8 +57,14 @@ $(BUILD_DIR)/send_recive_common.o: src-common/send_recive.cpp
 	mkdir -p $(BUILD_DIR)
 	$(CXX) $(CXXFLAGS) -I$(INCLUDE_DIR) -I./src-common -c $< -o $@
 
+
 # Rule for src-common/send_recive_helper.cpp
 $(BUILD_DIR)/send_recive_helper.o: src-common/send_recive_helper.cpp
+	mkdir -p $(BUILD_DIR)
+	$(CXX) $(CXXFLAGS) -I$(INCLUDE_DIR) -I./src-common -c $< -o $@
+
+# Rule for src-common/file_lock.cpp
+$(BUILD_DIR)/file_lock.o: src-common/file_lock.cpp
 	mkdir -p $(BUILD_DIR)
 	$(CXX) $(CXXFLAGS) -I$(INCLUDE_DIR) -I./src-common -c $< -o $@
 

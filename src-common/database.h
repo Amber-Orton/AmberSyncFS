@@ -36,7 +36,7 @@ void reset_in_progress_event(int id);
 void add_user(const std::string& username);
 
 // get a list of all users in the users table
-std::vector<std::string> get_all_users();
+std::vector<std::string> get_users();
 
 // Set or update a delete mtime
 void set_delete_mtime(const std::string& filename, uint64_t mtime);

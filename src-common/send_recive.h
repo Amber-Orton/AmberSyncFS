@@ -31,6 +31,10 @@ int receive_file_tls(std::string relative_start_directory, Connection* conn, Eve
 int receive_delete_file_tls(std::string relative_start_directory, Connection* conn, Event* out_event = nullptr);
 int receive_directory_tls(std::string relative_start_directory, Connection* conn, Event* out_event = nullptr);
 int receive_delete_directory_tls(std::string relative_start_directory, Connection* conn, Event* out_event = nullptr);
+int send_request_handle_pending_event_tls(Connection* conn, std::string relative_start_directory);
+
 int handle_incoming_event(Connection* conn, std::string relative_start_directory, Event* out_event = nullptr);
+int handle_send_event(Connection* conn, std::string relative_start_directory, Event* event);
+
 
 #endif

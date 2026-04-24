@@ -17,6 +17,9 @@
 #include <send_recive.h>
 
 int port = 0;
+std::string tracked_files_directory;
+std::string data_directory;
+
 
 
 int main(int argc, char *argv[]) {
@@ -33,20 +36,20 @@ int main(int argc, char *argv[]) {
         return 1;
     }
     // and check that it exists and is a directory
-    std::string tracked_files_directory = argv[2];
+    tracked_files_directory = argv[2];
     if (!std::filesystem::exists(tracked_files_directory) || !std::filesystem::is_directory(tracked_files_directory)) {
         std::cerr << "Provided path is not a valid directory: " << tracked_files_directory << "\n";
         return 1;
     }
 
-    // check data_dir and open database
-    std::string data_dir = argv[3];
-    if (!std::filesystem::exists(data_dir) || !std::filesystem::is_directory(data_dir)) {
-        std::cerr << "Provided path is not a valid directory: " << data_dir << "\n";
+    // check data_directory and open database
+    data_directory = argv[3];
+    if (!std::filesystem::exists(data_directory) || !std::filesystem::is_directory(data_directory)) {
+        std::cerr << "Provided path is not a valid directory: " << data_directory << "\n";
         return 1;
     }
-    if (!open_db(data_dir + "/deleted_file_times")) {
-        std::cerr << "Failed to initialize server database at: " << data_dir + "/deleted_file_times" << "\n";
+    if (!open_db(data_directory + "/deleted_file_times")) {
+        std::cerr << "Failed to initialize server database at: " << data_directory + "/deleted_file_times" << "\n";
         return 1;
     }
     reset_in_progress_events(); // reset any events that were in progress
@@ -143,7 +146,7 @@ int main(int argc, char *argv[]) {
             continue;
         }
         
-        std::thread([tracked_files_directory, conn]() {
+        std::thread([conn]() {
             // read client name length and name
             uint32_t client_name_len = 0;
             if (safe_SSL_read(conn, &client_name_len, sizeof(client_name_len)) <= 0) {
@@ -169,10 +172,22 @@ int main(int argc, char *argv[]) {
                 std::cerr << "Error handling incoming event from client: " << client_name << "\n";
                 close_connection(conn);
                 return;
-            } else {
-                std::cout << "Successfully handled incoming event from client: " << client_name << "\n";
-                end_of_connection(conn, event);
             }
+
+            if (event.type == "RP") {
+                // Client requested a pending event
+                if (auto event = get_and_set_in_progress_next_event(client_name)) {
+                    // sned the event to the client
+                    if (handle_send_event(conn, tracked_files_directory, &event.value()) < 0) {
+                        std::cerr << "Failed to send pending event to client: " << client_name << "\n";
+                        close_connection(conn);
+                        reset_in_progress_event(event->id); // re-add the event to the database to retry later
+                        return;
+                    }
+                }
+            }
+
+            end_of_connection(conn, event);
 
         }).detach();
     }
@@ -182,11 +197,18 @@ int main(int argc, char *argv[]) {
 }
 
 void end_of_connection(Connection* conn, Event& event) {
+    // send number of events that the client need to process
+    uint32_t num_events = get_pending_event_count(event.client_id);
+    uint32_t num_events_net = htonl(num_events);
+    if (safe_SSL_write(conn, &num_events_net, sizeof(num_events_net)) < 0) {
+        std::cerr << "Failed to send number of pending events to client: " << event.client_id << "\n";
+    }
+
     close_connection(conn);
 
     // create events for all other clients to process the changes from this client
     auto origional_client_id = event.client_id;
-    for (std::string user : get_all_users()) {
+    for (std::string user : get_users()) {
         if (user != origional_client_id) {
             event.client_id = user;
             create_event(event);

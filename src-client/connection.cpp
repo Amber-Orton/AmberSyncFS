@@ -26,121 +26,6 @@ const auto max_retry_timeout = std::chrono::seconds(60);
 std::mutex connection_try_mutex;
 
 
-
-
-int send_file(const Event& event) {
-    // Establish TLS connection
-    auto* conn = try_establish_connection(server_ip, server_port);
-    if (!conn) {
-        std::cerr << "Failed to open TLS connection\n";
-        return -1;
-    }
-
-    int sucess = start_of_connection(conn);
-
-    if (sucess < 0) {
-        std::cerr << "Failed to initialize server connection\n";
-        close_connection(conn);
-        return sucess;
-    }
-
-    sucess = send_file_tls(track_root, event.path, conn);
-
-    if (sucess >= 0) {
-        auto eoc_result = end_of_connection(conn);
-        return eoc_result != 0 ? eoc_result : sucess;
-    } else {
-        std::cerr << "Failed to send file\n";
-        auto close_result = close_connection(conn);
-        return close_result != 0 ? close_result : sucess;
-    }
-}
-
-int send_delete_file(const Event& event) {
-    // Establish TLS connection
-    auto* conn = try_establish_connection(server_ip, server_port);
-    if (!conn) {
-        std::cerr << "Failed to open TLS connection\n";
-        return -1;
-    }
-
-    int sucess = start_of_connection(conn);
-
-    if (sucess < 0) {
-        std::cerr << "Failed to initialize server connection\n";
-        close_connection(conn);
-        return sucess;
-    }
-
-    sucess = send_delete_file_tls(event.path, event.timestamp, conn);
-
-    if (sucess >= 0) {
-        auto eoc_result = end_of_connection(conn);
-        return eoc_result != 0 ? eoc_result : sucess;
-    } else {
-        std::cerr << "Failed to send delete file\n";
-        auto close_result = close_connection(conn);
-        return close_result != 0 ? close_result : sucess;
-    }
-}
-
-int send_directory(const Event& event) {
-    // Establish TLS connection
-    auto* conn = try_establish_connection(server_ip, server_port);
-    if (!conn) {
-        std::cerr << "Failed to open TLS connection\n";
-        return -1;
-    }
-
-    int sucess = start_of_connection(conn);
-
-    if (sucess < 0) {
-        std::cerr << "Failed to initialize server connection\n";
-        close_connection(conn);
-        return sucess;
-    }
-
-    sucess = send_directory_tls(track_root, event.path, conn);
-
-    if (sucess >= 0) {
-        auto eoc_result = end_of_connection(conn);
-        return eoc_result != 0 ? eoc_result : sucess;
-    } else {
-        std::cerr << "Failed to send directory\n";
-        auto close_result = close_connection(conn);
-        return close_result != 0 ? close_result : sucess;
-    }
-}
-
-int send_delete_directory(const Event& event) {
-    // Establish TLS connection
-    auto* conn = try_establish_connection(server_ip, server_port);
-    if (!conn) {
-        std::cerr << "Failed to open TLS connection\n";
-        return -1;
-    }
-
-    int sucess = start_of_connection(conn);
-
-    if (sucess < 0) {
-        std::cerr << "Failed to initialize server connection\n";
-        close_connection(conn);
-        return sucess;
-    }
-
-    sucess = send_delete_directory_tls(event.path, event.timestamp, conn);
-
-    if (sucess >= 0) {
-        auto eoc_result = end_of_connection(conn);
-        return eoc_result != 0 ? eoc_result : sucess;
-    } else {
-        std::cerr << "Failed to send delete directory\n";
-        auto close_result = close_connection(conn);
-        return close_result != 0 ? close_result : sucess;
-    }
-}
-
-
 Connection* try_establish_connection(const std::string& server_ip, int port) {
     while (true) {
         if (is_connected.load()) {
@@ -277,6 +162,17 @@ int start_of_connection(Connection* conn) {
 
 int end_of_connection(Connection* conn) {
     if (!conn) return -1;
+    uint32_t num_events_net;
+    if (safe_SSL_read(conn, &num_events_net, sizeof(num_events_net)) <= 0) {
+        std::cerr << "Failed to read number of pending events from server\n";
+        close_connection(conn);
+        return -1;
+    }
+    uint32_t num_events = ntohl(num_events_net);
+    pending_events.store(num_events);
+    for (uint32_t i = 0; i < num_events && i < max_num_threads; ++i) {
+        events_cv.notify_one();
+    }
     return close_connection(conn);
 }
 
