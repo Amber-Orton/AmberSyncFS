@@ -1,10 +1,9 @@
-
 #ifndef SERVER_H
 #define SERVER_H
 
 #include <openssl/ssl.h>
 #include <string>
-#include "../src-common/send_recive.h"
+#include "send_recive.h"
 
 extern int port;
 

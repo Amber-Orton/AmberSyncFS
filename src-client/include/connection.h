@@ -2,7 +2,7 @@
 #ifndef CONNECTION_H
 #define CONNECTION_H
 
-#include "../src-common/send_recive.h"
+#include "send_recive.h"
 
 
 // Note: try_establish_connection is preferred over establish_connection for general use. Returns pointer to Connection or nullptr on failure.

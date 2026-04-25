@@ -1,8 +1,8 @@
 # Compiler
 CXX = g++
 
-# Flags
-CXXFLAGS = -Wall -Wextra -Wpedantic -O2 -std=c++20
+ # Flags
+CXXFLAGS = -Wall -Wextra -Wpedantic -O2 -std=c++20 -Isrc-common -Iinclude
 LDLIBS = -lssl -lcrypto -lsqlite3
 
 
@@ -47,31 +47,35 @@ $(CLIENT_TARGET): $(CLIENT_OBJ)
 	$(CXX) $(CXXFLAGS) $(CLIENT_OBJ) -o $(CLIENT_TARGET) $(LDLIBS)
 
 
+
 # Compile rules
 $(BUILD_DIR)/%.o: $(SRC_DIR)/%.cpp
 	mkdir -p $(BUILD_DIR)
-	$(CXX) $(CXXFLAGS) -I$(INCLUDE_DIR) -I./src-common -c $< -o $@
+	$(CXX) $(CXXFLAGS) -c $< -o $@
+
 
 # Rule for src-common/send_recive.cpp
 $(BUILD_DIR)/send_recive_common.o: src-common/send_recive.cpp
 	mkdir -p $(BUILD_DIR)
-	$(CXX) $(CXXFLAGS) -I$(INCLUDE_DIR) -I./src-common -c $< -o $@
+	$(CXX) $(CXXFLAGS) -c $< -o $@
+
 
 
 # Rule for src-common/send_recive_helper.cpp
 $(BUILD_DIR)/send_recive_helper.o: src-common/send_recive_helper.cpp
 	mkdir -p $(BUILD_DIR)
-	$(CXX) $(CXXFLAGS) -I$(INCLUDE_DIR) -I./src-common -c $< -o $@
+	$(CXX) $(CXXFLAGS) -c $< -o $@
 
 # Rule for src-common/file_lock.cpp
 $(BUILD_DIR)/file_lock.o: src-common/file_lock.cpp
 	mkdir -p $(BUILD_DIR)
 	$(CXX) $(CXXFLAGS) -I$(INCLUDE_DIR) -I./src-common -c $< -o $@
 
+
 # Rule for src-common/database.cpp
 $(BUILD_DIR)/database.o: src-common/database.cpp
 	mkdir -p $(BUILD_DIR)
-	$(CXX) $(CXXFLAGS) -I$(INCLUDE_DIR) -I./src-common -c $< -o $@
+	$(CXX) $(CXXFLAGS) -c $< -o $@
 
 $(BUILD_DIR)/server.o: $(SRC_SERVER_DIR)/server.cpp
 	mkdir -p $(BUILD_DIR)
@@ -79,10 +83,11 @@ $(BUILD_DIR)/server.o: $(SRC_SERVER_DIR)/server.cpp
 
 
 
+
 # Pattern rule for src-client
 $(BUILD_DIR)/%.o: $(SRC_CLIENT_DIR)/%.cpp
 	mkdir -p $(BUILD_DIR)
-	$(CXX) $(CXXFLAGS) -I$(INCLUDE_DIR) -I$(SRC_CLIENT_DIR)/include -I./src-common -c $< -o $@
+	$(CXX) $(CXXFLAGS) -I$(SRC_CLIENT_DIR)/include -c $< -o $@
 
 # Clean
 clean:

@@ -12,9 +12,9 @@
 #include "server.h"
 #include <filesystem>
 #include <sys/stat.h>
-#include <send_recive_helper.h>
-#include <database.h>
-#include <send_recive.h>
+#include "send_recive_helper.h"
+#include "database.h"
+#include "send_recive.h"
 
 int port = 0;
 std::string tracked_files_directory;
