@@ -19,8 +19,13 @@ struct timer_set {
 	static std::atomic<bool> cleanup_thread_running;
 	static std::atomic<bool> cleanup_thread_run_again;
 
+	// Checks if an event should be created. Returns 0 if yes, 1 if not needed.
 	int check(const std::string& event_type, const std::string& relative_path, uint64_t mod_time);
+
+	// Cleans up old entries in the timer set.
 	void cleanup();
+
+	// Thread function for cleanup. Returns nullptr.
 	static void* cleanup_thread_func(void* arg);
 };
 

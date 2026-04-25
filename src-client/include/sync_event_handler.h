@@ -4,6 +4,7 @@
 #include <string>
 
 
+// Main event handler loop. Processes events and pending events.
 void handle_events();
 
 #endif

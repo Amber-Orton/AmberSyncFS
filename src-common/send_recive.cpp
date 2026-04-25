@@ -22,6 +22,13 @@
 #include "database.h"
 #include "file_lock.h"
 
+
+// functions to handle sending and reciving events
+// when interacting with files or directories make sure to use the FileLockGuard to avaoid race conditions
+// use safe_SSL_write and safe_SSL_read for all SSL interactions to properly handle errors and disconnections
+// connections should be established using the try_establish_connection
+// and ending the connection is down to the initialiser of the connection
+
 int send_file_tls(std::string relative_start_directory, std::string relative_file_path, Connection* conn) {
     FileLockGuard guard(std::filesystem::path(relative_file_path).lexically_normal().string()); // Lock normalized file path
 

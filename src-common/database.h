@@ -9,42 +9,43 @@
 #include "send_recive.h"
 #include <vector>
 
-// Open or create the database
+// Opens or creates the database at the given path. Returns true on success, false on failure.
 bool open_db(const std::string& db_path);
 
-// Create an event in the events table
+// Creates an event in the events table.
 void create_event(const std::string& type, const std::string& payload, uint64_t timestamp, const std::string& client_id = "");
 
+// Creates an event in the events table from an Event struct.
 void create_event(const Event& event);
 
-// retrives the next event from the events table and removes it from the table
+// Retrieves the next event for the client and marks it in progress. Returns std::nullopt if none.
 std::optional<Event> get_and_set_in_progress_next_event(const std::string& client_id = "");
 
-// retrive the number of events pending for a client or total if client_id is empty
+// Returns the number of pending events for a client (or all if client_id is empty).
 int get_pending_event_count(const std::string& client_id = "");
 
-// remove an event by id
+// Removes an event by id.
 void remove_event(int id);
 
-// Set all in_progress events back to not in progress (e.g. on startup or after a crash)
+// Sets all in_progress events back to not in progress (optionally for a client).
 void reset_in_progress_events(const std::string& client_id = "");
 
-// reset a single in_progress event back to not in progress (e.g. after a failed processing attempt)
+// Resets a single in_progress event back to not in progress by id.
 void reset_in_progress_event(int id);
 
-// add a user to the users table
+// Adds a user to the users table.
 void add_user(const std::string& username);
 
-// get a list of all users in the users table
+// Returns a list of all users in the users table.
 std::vector<std::string> get_users();
 
-// Set or update a delete mtime
+// Sets or updates the delete mtime for a file.
 void set_delete_mtime(const std::string& filename, uint64_t mtime);
 
-// Get the last delete mtime for a file (returns 0 if not found)
+// Returns the last delete mtime for a file (0 if not found).
 uint64_t get_delete_mtime(const std::string& filename);
 
-// Close the database
+// Closes the database and releases resources.
 void close_db();
 
 #endif
