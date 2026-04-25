@@ -30,11 +30,13 @@
 // and ending the connection is down to the initialiser of the connection
 
 int send_file_tls(std::string relative_start_directory, std::string relative_file_path, Connection* conn) {
-    FileLockGuard guard(std::filesystem::path(relative_file_path).lexically_normal().string()); // Lock normalized file path
+    
+    std::filesystem::path full_path(relative_start_directory);
+    full_path.append(relative_file_path);
+    FileLockGuard guard(full_path.lexically_normal().string()); // Lock normalized file path
 
     // Open file
-    std::string file_path = relative_start_directory + "/" + relative_file_path;
-    std::ifstream file(file_path, std::ios::binary);
+    std::ifstream file(full_path, std::ios::binary);
     if (!file) {
         std::cerr << "Failed to open file\n";
         return 1; // return 1 to indicate failure but do not retry as this is likely an issue with the file itself and not the connection
@@ -57,14 +59,14 @@ int send_file_tls(std::string relative_start_directory, std::string relative_fil
         return -1;
     }
 
-    uint64_t mod_time = get_file_modification_time(file_path);
+    uint64_t mod_time = get_file_modification_time(full_path);
     uint64_t mod_time_net = htonll(mod_time);
     if (safe_SSL_write(conn, &mod_time_net, sizeof(mod_time_net)) < 0) {
         std::cerr << "Failed to send file modification time\n";
         return -1;
     }
 
-    uint64_t file_size = std::filesystem::file_size(file_path);
+    uint64_t file_size = std::filesystem::file_size(full_path);
     uint64_t file_size_net = htonll(file_size);
     if (safe_SSL_write(conn, &file_size_net, sizeof(file_size_net)) < 0) {
         std::cerr << "Failed to send file size\n";
@@ -89,8 +91,11 @@ int send_file_tls(std::string relative_start_directory, std::string relative_fil
     return 0;
 }
 
-int send_delete_file_tls(std::string relative_file_path, uint64_t mod_time, Connection* conn) {
-    FileLockGuard guard(std::filesystem::path(relative_file_path).lexically_normal().string()); // Lock normalized file path
+int send_delete_file_tls(std::string relative_start_directory, std::string relative_file_path, uint64_t mod_time, Connection* conn) {
+    std::filesystem::path full_path(relative_start_directory);
+    full_path.append(relative_file_path);
+    FileLockGuard guard(full_path.lexically_normal().string()); // Lock normalized file path
+
     if (safe_SSL_write(conn, "DF", 2) < 0) { // Simple command to indicate delete
         std::cerr << "Failed to send delete command\n";
         return -1;
@@ -118,7 +123,9 @@ int send_delete_file_tls(std::string relative_file_path, uint64_t mod_time, Conn
 }
 
 int send_directory_tls(std::string relative_start_directory, std::string relative_directory_path, Connection* conn) {
-    FileLockGuard guard(std::filesystem::path(relative_directory_path).lexically_normal().string()); // Lock normalized directory path
+    std::filesystem::path full_path(relative_start_directory);
+    full_path.append(relative_directory_path);
+    FileLockGuard guard(full_path.lexically_normal().string()); // Lock normalized directory path
     
     if (safe_SSL_write(conn, "UD", 2) < 0) { // Simple command to indicate upload directory
         std::cerr << "Failed to send upload directory command\n";
@@ -138,7 +145,7 @@ int send_directory_tls(std::string relative_start_directory, std::string relativ
     }
 
     // get and send directory modification time
-    auto mod_time = get_file_modification_time(relative_start_directory + "/" + relative_directory_path);
+    auto mod_time = get_file_modification_time(full_path.string());
     uint64_t mod_time_net = htonll(mod_time);
     if (safe_SSL_write(conn, &mod_time_net, sizeof(mod_time_net)) < 0) {
         std::cerr << "Failed to send directory modification time\n";
@@ -148,9 +155,11 @@ int send_directory_tls(std::string relative_start_directory, std::string relativ
     return 0;
 }
 
-int send_delete_directory_tls(std::string relative_directory_path, uint64_t mod_time, Connection* conn) {
-    FileLockGuard guard(std::filesystem::path(relative_directory_path).lexically_normal().string()); // Lock normalized directory path
-    
+int send_delete_directory_tls(std::string relative_start_directory, std::string relative_directory_path, uint64_t mod_time, Connection* conn) {
+    std::filesystem::path full_path(relative_start_directory);
+    full_path.append(relative_directory_path);
+    FileLockGuard guard(full_path.lexically_normal().string()); // Lock normalized directory path
+
     if (safe_SSL_write(conn, "DD", 2) < 0) { // Simple command to indicate delete directory
         std::cerr << "Failed to send delete directory command\n";
         return -1;
@@ -177,7 +186,7 @@ int send_delete_directory_tls(std::string relative_directory_path, uint64_t mod_
     return 0;
 }
 
-int receive_file_tls(std::string relative_directory_path, Connection* conn, Event* out_event) {
+int receive_file_tls(std::string relative_start_directory, Connection* conn, Event* out_event) {
     // read file name length and name
     uint32_t name_len = 0;
     int n1 = safe_SSL_read(conn, &name_len, sizeof(name_len));
@@ -200,7 +209,9 @@ int receive_file_tls(std::string relative_directory_path, Connection* conn, Even
     }
     std::cout << "[DEBUG] Read file name: '" << filename << "' (" << n2 << " bytes)\n" << std::flush;
 
-    FileLockGuard guard(std::filesystem::path(filename).lexically_normal().string()); // Lock normalized file path
+    std::filesystem::path output_path(relative_start_directory);
+    output_path.append(filename);
+    FileLockGuard guard(output_path.lexically_normal().string()); // Lock normalized file path
 
     // update out_event
     if (out_event) {
@@ -220,7 +231,7 @@ int receive_file_tls(std::string relative_directory_path, Connection* conn, Even
         out_event->timestamp = mod_time;
     }
 
-    auto current_mod_time = get_file_modification_time(relative_directory_path + "/" + filename);
+    auto current_mod_time = get_file_modification_time(relative_start_directory + "/" + filename);
     if (mod_time <= current_mod_time) {
         std::cerr << "Received file is not newer than existing file. Skipping update for '" << filename << "'\n" << std::flush;
         // Still need to read the incoming file data to clear the SSL buffer, but we can discard it since it's not newer
@@ -239,10 +250,7 @@ int receive_file_tls(std::string relative_directory_path, Connection* conn, Even
     }
     uint64_t bits_left = ntohll(bits_left_net);
 
-    // Open file for writing
-    std::filesystem::path output_path(relative_directory_path);
-    output_path.append(filename);
-
+    // Open file for writing move old file to temp to avaoid issues with lost connections
     auto old_exists = std::filesystem::exists(output_path);
     if (old_exists) {
         if (rename(output_path.string().c_str(), (output_path.string() + ".tmp").c_str()) < 0) {
@@ -310,7 +318,7 @@ int receive_file_tls(std::string relative_directory_path, Connection* conn, Even
     return 0;
 }
 
-int receive_delete_file_tls(std::string relative_directory_path, Connection* conn, Event* out_event) {
+int receive_delete_file_tls(std::string relative_start_directory, Connection* conn, Event* out_event) {
     uint32_t name_len = 0;
     int n1 = safe_SSL_read(conn, &name_len, sizeof(name_len));
     if (n1 <= 0) {
@@ -332,11 +340,11 @@ int receive_delete_file_tls(std::string relative_directory_path, Connection* con
     }
     std::cout << "[DEBUG] Read file name for deletion: '" << filename << "' (" << n2 << " bytes)\n" << std::flush;
 
-    FileLockGuard guard(std::filesystem::path(filename).lexically_normal().string()); // Lock normalized file path
-
-
-    std::filesystem::path file_path(relative_directory_path);
+    std::filesystem::path file_path(relative_start_directory);
     file_path.append(filename);
+    FileLockGuard guard(file_path.lexically_normal().string()); // Lock normalized file path
+
+
 
     // update out_event
     if (out_event) {
@@ -380,7 +388,7 @@ int receive_delete_file_tls(std::string relative_directory_path, Connection* con
     return 0;
 }
 
-int receive_directory_tls(std::string relative_directory_path, Connection* conn, Event* out_event) {
+int receive_directory_tls(std::string relative_start_directory, Connection* conn, Event* out_event) {
     uint32_t name_len = 0;
     int n1 = safe_SSL_read(conn, &name_len, sizeof(name_len));
     if (n1 <= 0) {
@@ -402,7 +410,9 @@ int receive_directory_tls(std::string relative_directory_path, Connection* conn,
     }
     std::cout << "[DEBUG] Read directory name: '" << dirname << "' (" << n2 << " bytes)\n" << std::flush;
 
-    FileLockGuard guard(std::filesystem::path(dirname).lexically_normal().string()); // Lock normalized directory path
+    std::filesystem::path dir_path(relative_start_directory);
+    dir_path.append(dirname);
+    FileLockGuard guard(dir_path.lexically_normal().string()); // Lock normalized directory path
 
     // update out_event
     if (out_event) {
@@ -422,14 +432,12 @@ int receive_directory_tls(std::string relative_directory_path, Connection* conn,
         out_event->timestamp = mod_time;
     }
 
-    auto current_mod_time = get_file_modification_time(relative_directory_path + "/" + dirname);
+    auto current_mod_time = get_file_modification_time(dir_path.string());
     if (mod_time <= current_mod_time) {
         std::cerr << "Received directory is not newer than existing directory. Skipping update for '" << dirname << "'\n" << std::flush;
         return 1; // Not an error, just no update needed
     }
 
-    std::filesystem::path dir_path(relative_directory_path);
-    dir_path.append(dirname);
 
     if (!std::filesystem::create_directories(dir_path)
         && !std::filesystem::is_directory(dir_path)) {
@@ -445,7 +453,7 @@ int receive_directory_tls(std::string relative_directory_path, Connection* conn,
     return 0;
 }
 
-int receive_delete_directory_tls(std::string relative_directory_path, Connection* conn, Event* out_event) {
+int receive_delete_directory_tls(std::string relative_start_directory, Connection* conn, Event* out_event) {
     uint32_t name_len = 0;
     int n1 = safe_SSL_read(conn, &name_len, sizeof(name_len));
     if (n1 <= 0) {
@@ -467,7 +475,11 @@ int receive_delete_directory_tls(std::string relative_directory_path, Connection
     }
     std::cout << "[DEBUG] Read directory name: '" << dirname << "' (" << n2 << " bytes)\n" << std::flush;
 
-    FileLockGuard guard(std::filesystem::path(dirname).lexically_normal().string()); // Lock normalized directory path
+    // construct full directory path
+    // Lock the directory path to prevent concurrent modifications
+    std::filesystem::path dir_path(relative_start_directory);
+    dir_path.append(dirname);
+    FileLockGuard guard(dir_path.lexically_normal().string()); // Lock normalized directory path
 
 
     // update out_event
@@ -488,10 +500,8 @@ int receive_delete_directory_tls(std::string relative_directory_path, Connection
         out_event->timestamp = mod_time;
     }
 
-    std::filesystem::path dir_path(relative_directory_path);
-    dir_path.append(dirname);
 
-    auto current_mod_time = get_file_modification_time(dir_path.string());
+    auto current_mod_time = get_file_modification_time(dir_path);
     if (mod_time <= current_mod_time) {
         std::cerr << "Received delete command is not newer than existing directory. Skipping deletion for '" << dirname << "'\n" << std::flush;
         return 1; // Not an error, just no deletion needed
@@ -543,41 +553,34 @@ int handle_incoming_event(Connection* conn, std::string relative_start_directory
     // means can be DOSed by opening many connections and sending commands without closing them but clients are certified and assumed to be non-malicious
     if (std::strncmp(command, "UF", 2) == 0) {
         std::cout << "Received upload command from client\n";
-        if (receive_file_tls(relative_start_directory, conn, out_event) < 0) {
+        int result = receive_file_tls(relative_start_directory, conn, out_event);
+        if (result < 0) {
             std::cerr << "Failed to receive file\n";
-            return -1;
-        } else {
-            return 0;
         }
+        return result;
     } else if (std::strncmp(command, "DF", 2) == 0) {
         std::cout << "Received delete command from client\n";
-        if (receive_delete_file_tls(relative_start_directory, conn, out_event) < 0) {
+        int result = receive_delete_file_tls(relative_start_directory, conn, out_event);
+        if (result < 0) {
             std::cerr << "Failed to delete file\n";
-            return -1;
-        } else {
-            return 0;
         }
+        return result;
     } else if (std::strncmp(command, "UD", 2) == 0) {
         std::cout << "Received upload directory command from client\n";
-        if (receive_directory_tls(relative_start_directory, conn, out_event) < 0) {
+        int result = receive_directory_tls(relative_start_directory, conn, out_event);
+        if (result < 0) {
             std::cerr << "Failed to receive directory\n";
-            return -1;
-        } else {
-            return 0;
         }
+        return result;
     } else if (std::strncmp(command, "DD", 2) == 0) {
         std::cout << "Received delete directory command from client\n";
-        if (receive_delete_directory_tls(relative_start_directory, conn, out_event) < 0) {
+        int result = receive_delete_directory_tls(relative_start_directory, conn, out_event);
+        if (result < 0) {
             std::cerr << "Failed to delete directory\n";
-            return -1;
-        } else {
-            return 0;
         }
+        return result;
     } else if (std::strncmp(command, "RP", 2) == 0) {
         std::cout << "Received request pending events command from client\n";
-        if (out_event) {
-            out_event->type = "RP";
-        }
         return 0; // No error, but no event data to return for this command
     } else {
         std::cerr << "Unknown command received from client: " << std::string(command, 2) << "\n";
@@ -596,7 +599,7 @@ int handle_send_event(Connection* conn, std::string relative_start_directory, Ev
             }
         } else if (event->type == "DF") {
             printf("Processing delete file event for path: %s\n", event->path.c_str());
-            if (send_delete_file_tls(event->path, event->timestamp, conn) < 0) {
+            if (send_delete_file_tls(relative_start_directory, event->path, event->timestamp, conn) < 0) {
                 std::cerr << "Failed to send delete file request: " << event->path << "\n";
                 return -1;
             }
@@ -608,7 +611,7 @@ int handle_send_event(Connection* conn, std::string relative_start_directory, Ev
             }
         } else if (event->type == "DD") {
             printf("Processing delete directory event for path: %s\n", event->path.c_str());
-            if (send_delete_directory_tls(event->path, event->timestamp, conn) < 0) {
+            if (send_delete_directory_tls(relative_start_directory, event->path, event->timestamp, conn) < 0) {
                 std::cerr << "Failed to send delete directory request: " << event->path << "\n";
                 return -1;
             }

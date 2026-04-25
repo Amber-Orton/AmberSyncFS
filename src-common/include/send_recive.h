@@ -28,13 +28,13 @@ using Connection = struct connection;
 int send_file_tls(std::string relative_start_directory, std::string relative_file_path, Connection* conn);
 
 // Returns 0 on success, -1 on failure, and 1 if the file was not deleted because the incoming delete command was not newer than the existing file (but still read and discarded the incoming data to clear the SSL buffer)
-int send_delete_file_tls(std::string relative_file_path, uint64_t mod_time, Connection* conn);
+int send_delete_file_tls(std::string relative_start_directory, std::string relative_file_path, uint64_t mod_time, Connection* conn);
 
 // Returns 0 on success, -1 on failure, and 1 if the directory was not updated because the incoming directory was not newer than the existing directory (but still read and discarded the incoming data to clear the SSL buffer)
 int send_directory_tls(std::string relative_start_directory, std::string relative_directory_path, Connection* conn);
 
 // Returns 0 on success, -1 on failure, and 1 if the directory was not deleted because the incoming delete command was not newer than the existing directory (but still read and discarded the incoming data to clear the SSL buffer)
-int send_delete_directory_tls(std::string relative_directory_path, uint64_t mod_time, Connection* conn);
+int send_delete_directory_tls(std::string relative_start_directory, std::string relative_directory_path, uint64_t mod_time, Connection* conn);
 
 // Returns 0 on success, -1 on failure, and 1 if the file was not updated because the incoming file was not newer than the existing file (but still read and discarded the incoming data to clear the SSL buffer)
 int receive_file_tls(std::string relative_start_directory, Connection* conn, Event* out_event = nullptr);
