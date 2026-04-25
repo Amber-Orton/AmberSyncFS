@@ -48,8 +48,8 @@ int main(int argc, char *argv[]) {
         std::cerr << "Provided path is not a valid directory: " << data_directory << "\n";
         return 1;
     }
-    if (!open_db(data_directory + "/deleted_file_times")) {
-        std::cerr << "Failed to initialize server database at: " << data_directory + "/deleted_file_times" << "\n";
+    if (!open_db(data_directory + "/deleted_file_times.db")) {
+        std::cerr << "Failed to initialize server database at: " << data_directory + "/deleted_file_times.db" << "\n";
         return 1;
     }
     reset_in_progress_events(); // reset any events that were in progress
