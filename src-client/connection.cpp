@@ -170,7 +170,7 @@ int end_of_connection(Connection* conn) {
     }
     uint32_t num_events = ntohl(num_events_net);
     pending_events.store(num_events);
-    for (uint32_t i = 0; i < num_events && i < max_num_threads; ++i) {
+    for (uint32_t i = 0; i < num_events && i < num_threads; ++i) {
         events_cv.notify_one();
     }
     return close_connection(conn);

@@ -23,7 +23,7 @@ std::atomic_ulong event_counter{0};
 std::string data_dir;
 std::atomic_uint32_t pending_events{0};
 std::condition_variable events_cv;
-unsigned int max_num_threads;
+unsigned int num_threads;
 
 void ensure_dir(const std::string& path) {
 	if (mkdir(path.c_str(), 0777) && errno != EEXIST) {
@@ -57,7 +57,7 @@ int main(int argc, char *argv[]) {
 
 	
 	// Initialize the event semaphore with the number of hardware threads (or 4 if unknown)
-	max_num_threads = std::thread::hardware_concurrency();
+	unsigned int max_num_threads = std::thread::hardware_concurrency();
 	if (max_num_threads > 0) {
 		num_threads = std::min(num_threads, max_num_threads);
 	} else {
@@ -65,8 +65,8 @@ int main(int argc, char *argv[]) {
 	}
 
 	
-	//create and run handler_threads
 	std::thread tracker_thread(start_tracking);
+	//create and run handler_threads
 	auto handler_threads = std::vector<std::thread>{};
 	for (unsigned int i = 0; i < num_threads; ++i) {
 		handler_threads.emplace_back(handle_events);

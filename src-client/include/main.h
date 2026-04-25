@@ -34,7 +34,7 @@ extern std::atomic_uint32_t pending_events;
 // Condition variable for event notification.
 extern std::condition_variable events_cv;
 
-// Maximum number of threads/concurrent connections.
-extern unsigned int max_num_threads;
+// Number of threads/concurrent connections.
+extern unsigned int num_threads;
 
 #endif
