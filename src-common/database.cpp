@@ -41,7 +41,7 @@ bool open_db(const std::string& db_path) {
         return false;
     }
 
-    const char* events_sql = "CREATE TABLE IF NOT EXISTS events (id INTEGER PRIMARY KEY AUTOINCREMENT, client_id TEXT, type TEXT, payload TEXT, timestamp INTEGER, in_progress INTEGER DEFAULT 0);";
+    const char* events_sql = "CREATE TABLE IF NOT EXISTS events (id INTEGER PRIMARY KEY AUTOINCREMENT, client_id TEXT, type INTEGER, payload TEXT, timestamp INTEGER, in_progress INTEGER DEFAULT 0);";
     if (sqlite3_exec(db, events_sql, nullptr, nullptr, &err) != SQLITE_OK) {
         std::cerr << "Failed to create 'events' table: " << (err ? err : "unknown sqlite error") << "\n";
         sqlite3_free(err);
@@ -52,7 +52,7 @@ bool open_db(const std::string& db_path) {
 }
 
 // Create an event in the events table
-void create_event(const std::string& type, const std::string& payload, uint64_t timestamp, const std::string& client_id = "") {
+void create_event(const CommandType& type, const std::string& payload, uint64_t timestamp, const std::string& client_id = "") {
     std::lock_guard<std::mutex> lock(db_mutex);
     if (!db) {
         std::cerr << "create_event called before successful open_db\n";
@@ -65,7 +65,7 @@ void create_event(const std::string& type, const std::string& payload, uint64_t 
         return;
     }
     sqlite3_bind_text(stmt, 1, client_id.c_str(), -1, SQLITE_TRANSIENT);
-    sqlite3_bind_text(stmt, 2, type.c_str(), -1, SQLITE_TRANSIENT);
+    sqlite3_bind_int(stmt, 2, static_cast<int>(type));
     sqlite3_bind_text(stmt, 3, payload.c_str(), -1, SQLITE_TRANSIENT);
     sqlite3_bind_int64(stmt, 4, timestamp);
     if (sqlite3_step(stmt) != SQLITE_DONE) {
@@ -97,7 +97,7 @@ std::optional<Event> get_and_set_in_progress_next_event(const std::string& clien
         Event row_event;
         row_event.id = id;
         row_event.client_id = client_id;
-        row_event.type = reinterpret_cast<const char*>(sqlite3_column_text(stmt, 1));
+        row_event.type = static_cast<CommandType>(sqlite3_column_int(stmt, 1));
         row_event.path = reinterpret_cast<const char*>(sqlite3_column_text(stmt, 2));
         row_event.timestamp = static_cast<uint64_t>(sqlite3_column_int64(stmt, 3));
         event = row_event;
