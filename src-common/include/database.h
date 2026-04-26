@@ -8,12 +8,13 @@
 #include <optional>
 #include "send_recive.h"
 #include <vector>
+#include "command.h"
 
 // Opens or creates the database at the given path. Returns true on success, false on failure.
 bool open_db(const std::string& db_path);
 
 // Creates an event in the events table.
-void create_event(const std::string& type, const std::string& payload, uint64_t timestamp, const std::string& client_id = "");
+void create_event(const CommandType& type, const std::string& payload, uint64_t timestamp, const std::string& client_id = "");
 
 // Creates an event in the events table from an Event struct.
 void create_event(const Event& event);

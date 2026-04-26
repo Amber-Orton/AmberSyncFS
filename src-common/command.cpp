@@ -1,4 +1,5 @@
-#include "include/command.h"
+#include "command.h"
+#include <ostream>
 
 const char* to_string(CommandType type) {
     switch (type) {

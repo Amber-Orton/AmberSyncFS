@@ -53,7 +53,8 @@ int send_file_tls(std::string relative_start_directory, std::string relative_fil
         return 1; // return 1 to indicate failure but do not retry as this is likely an issue with the file itself and not the connection
     }
 
-    if (safe_SSL_write(conn, "UF", 2) < 0) { // Simple command to indicate upload
+    CommandType command = CommandType::UPLOAD_FILE;
+    if (safe_SSL_write(conn, &command, sizeof(command)) < 0) { // Simple command to indicate upload
         std::cerr << "Failed to send upload command\n";
         return -1;
     }
@@ -107,7 +108,8 @@ int send_delete_file_tls(std::string relative_start_directory, std::string relat
     full_path.append(relative_file_path);
     FileLockGuard guard(full_path.lexically_normal().string()); // Lock normalized file path
 
-    if (safe_SSL_write(conn, "DF", 2) < 0) { // Simple command to indicate delete
+    CommandType command = CommandType::DELETE_FILE;
+    if (safe_SSL_write(conn, &command, sizeof(command)) < 0) {
         std::cerr << "Failed to send delete command\n";
         return -1;
     }
@@ -138,7 +140,8 @@ int send_directory_tls(std::string relative_start_directory, std::string relativ
     full_path.append(relative_directory_path);
     FileLockGuard guard(full_path.lexically_normal().string()); // Lock normalized directory path
     
-    if (safe_SSL_write(conn, "UD", 2) < 0) { // Simple command to indicate upload directory
+    CommandType command = CommandType::UPLOAD_DIRECTORY;
+    if (safe_SSL_write(conn, &command, sizeof(command)) < 0) { // Simple command to indicate upload directory
         std::cerr << "Failed to send upload directory command\n";
         return -1;
     }
@@ -171,7 +174,8 @@ int send_delete_directory_tls(std::string relative_start_directory, std::string 
     full_path.append(relative_directory_path);
     FileLockGuard guard(full_path.lexically_normal().string()); // Lock normalized directory path
 
-    if (safe_SSL_write(conn, "DD", 2) < 0) { // Simple command to indicate delete directory
+    CommandType command = CommandType::DELETE_DIRECTORY;
+    if (safe_SSL_write(conn, &command, sizeof(command)) < 0) { // Simple command to indicate delete directory
         std::cerr << "Failed to send delete directory command\n";
         return -1;
     }
@@ -539,7 +543,8 @@ int receive_delete_directory_tls(std::string relative_start_directory, Connectio
 
 int send_request_handle_pending_event_tls(Connection* conn, std::string relative_start_directory) {
     if (!conn) return -1;
-    if (safe_SSL_write(conn, "RP", 2) < 0) {
+    CommandType command = CommandType::REQUEST_PENDING_EVENTS;
+    if (safe_SSL_write(conn, &command, sizeof(command)) < 0) {
         std::cerr << "Failed to send request pending events command\n";
         return -1;
     }
@@ -548,14 +553,14 @@ int send_request_handle_pending_event_tls(Connection* conn, std::string relative
 
 int handle_incoming_event(Connection* conn, std::string relative_start_directory, Event* out_event) {
     // Read command from client
-    CommandType *command;
-    int bytes_read = safe_SSL_read(conn, command, sizeof(command)); // Read command type (e.g., "UP" for upload)
+    CommandType command; // Dynamically allocate command to avoid stack issues with large structs and to ensure it remains valid after function returns if needed
+    int bytes_read = safe_SSL_read(conn, &command, sizeof(command)); // Read command type (e.g., "UP" for upload)
     if (bytes_read <= 0) {
         std::cerr << "Failed to read command from client\n";
         return -1;
     }
     if (out_event) {
-        out_event->type = *command;
+        out_event->type = command;
     }
 
 
@@ -563,41 +568,42 @@ int handle_incoming_event(Connection* conn, std::string relative_start_directory
     // each in a thread, allows infinite clients to connect and send commands without blocking each other
     // means can be DOSed by opening many connections and sending commands without closing them but clients are certified and assumed to be non-malicious
     
-    switch (*command) {
-        case CommandType::UPLOAD_FILE:
+    switch (command) {
+        case CommandType::UPLOAD_FILE: {
             std::cout << "Received upload command from client\n";
             int result = receive_file_tls(relative_start_directory, conn, out_event);
             if (result < 0) {
                 std::cerr << "Failed to receive file\n";
             }
             return result;
-        case CommandType::DELETE_FILE:
+        } case CommandType::DELETE_FILE: {
             std::cout << "Received delete command from client\n";
             int result = receive_delete_file_tls(relative_start_directory, conn, out_event);
             if (result < 0) {
                 std::cerr << "Failed to delete file\n";
             }
             return result;
-        case CommandType::UPLOAD_DIRECTORY:
+        } case CommandType::UPLOAD_DIRECTORY: {
             std::cout << "Received upload directory command from client\n";
             int result = receive_directory_tls(relative_start_directory, conn, out_event);
             if (result < 0) {
                 std::cerr << "Failed to receive directory\n";
             }
             return result;
-        case CommandType::DELETE_DIRECTORY:
+        } case CommandType::DELETE_DIRECTORY: {
             std::cout << "Received delete directory command from client\n";
             int result = receive_delete_directory_tls(relative_start_directory, conn, out_event);
             if (result < 0) {
                 std::cerr << "Failed to delete directory\n";
             }
             return result;
-        case CommandType::REQUEST_PENDING_EVENTS:
+        } case CommandType::REQUEST_PENDING_EVENTS: {
             std::cout << "Received request pending events command from client\n";
             return 0; // No error, but no event data to return for this command
-        default:
-            std::cerr << "Unknown command received from client: " << *command << "\n";
+        } default: {
+            std::cerr << "Unknown command received from client: " << command << "\n";
             return -1;
+        }
     }
 }
 
@@ -605,37 +611,38 @@ int handle_send_event(Connection* conn, std::string relative_start_directory, Ev
     // process the event
     if (event->path != "." && event->path != "..") {
         switch (event->type) {
-            case CommandType::UPLOAD_FILE:
+            case CommandType::UPLOAD_FILE: {
                 printf("Processing upload file event for path: %s\n", event->path.c_str());
                 if (send_file_tls(relative_start_directory, event->path, conn) < 0) {
                     std::cerr << "Failed to send file: " << event->path << "\n";
                     return -1;
                 }
                 break;
-            case CommandType::DELETE_FILE:
+            } case CommandType::DELETE_FILE: {
                 printf("Processing delete file event for path: %s\n", event->path.c_str());
                 if (send_delete_file_tls(relative_start_directory, event->path, event->timestamp, conn) < 0) {
                     std::cerr << "Failed to send delete file request: " << event->path << "\n";
                     return -1;
                 }
                 break;
-            case CommandType::UPLOAD_DIRECTORY:
+            } case CommandType::UPLOAD_DIRECTORY: {
                 printf("Processing upload directory event for path: %s\n", event->path.c_str());
                 if (send_directory_tls(relative_start_directory, event->path, conn) < 0) {
                     std::cerr << "Failed to send directory: " << event->path << "\n";
                     return -1;
                 }
                 break;
-            case CommandType::DELETE_DIRECTORY:
+            } case CommandType::DELETE_DIRECTORY: {
                 printf("Processing delete directory event for path: %s\n", event->path.c_str());
                 if (send_delete_directory_tls(relative_start_directory, event->path, event->timestamp, conn) < 0) {
                     std::cerr << "Failed to send delete directory request: " << event->path << "\n";
                     return -1;
                 }
                 break;
-            default:
+            } default: {
                 std::cerr << "Unknown event type: " << event->type << " for path: " << event->path << "\n";
                 return -2; // return -2 to indicate unknown event type
+            }
         }
         std::cout << "Processed event: " << event->type << " for path: " << event->path << "\n";
         return 0;

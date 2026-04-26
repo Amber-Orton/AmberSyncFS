@@ -174,7 +174,7 @@ int main(int argc, char *argv[]) {
                 return;
             }
 
-            if (event.type == "RP") {
+            if (event.type == CommandType::REQUEST_PENDING_EVENTS) {
                 // Client requested a pending event
                 if (auto event = get_and_set_in_progress_next_event(client_name)) {
                     // sned the event to the client

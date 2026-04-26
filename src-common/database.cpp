@@ -175,6 +175,14 @@ std::vector<std::string> get_users() {
     if (!db) {
         return users;
     }
+    // Ensure the users table exists
+    char* err = nullptr;
+    if (sqlite3_exec(db, "CREATE TABLE IF NOT EXISTS users (username TEXT PRIMARY KEY);", nullptr, nullptr, &err) != SQLITE_OK) {
+        std::cerr << "Failed to create users table: " << (err ? err : "unknown sqlite error") << "\n";
+        if (err) sqlite3_free(err);
+        return users;
+    }
+    // Now select usernames
     sqlite3_stmt* stmt;
     const char* sql = "SELECT username FROM users;";
     if (sqlite3_prepare_v2(db, sql, -1, &stmt, nullptr) != SQLITE_OK) {

@@ -29,7 +29,7 @@ extern std::string data_dir;
 extern std::string event_dir;
 
 // Number of pending events to process.
-extern std::atomic_uint32_t pending_events;
+extern std::atomic_uint64_t pending_events;
 
 // Condition variable for event notification.
 extern std::condition_variable events_cv;

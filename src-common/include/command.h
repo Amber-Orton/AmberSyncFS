@@ -13,6 +13,7 @@ enum class CommandType {
 // Returns string representation of CommandType
 const char* to_string(CommandType type);
 
+
 #include <ostream>
 std::ostream& operator<<(std::ostream& os, CommandType type);
 
