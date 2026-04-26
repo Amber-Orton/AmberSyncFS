@@ -207,7 +207,7 @@ void remove_event(int id) {
 }
 
 // retrive the number of events pending for a client
-int get_pending_event_count(const std::string& client_id = "") {
+uint64_t get_pending_event_count(const std::string& client_id = "") {
     std::lock_guard<std::mutex> lock(db_mutex);
     if (!db) {
         return 0;
@@ -219,9 +219,9 @@ int get_pending_event_count(const std::string& client_id = "") {
         return 0;
     }
     sqlite3_bind_text(stmt, 1, client_id.c_str(), -1, SQLITE_TRANSIENT);
-    int count = 0;
+    uint64_t count = 0;
     if (sqlite3_step(stmt) == SQLITE_ROW) {
-        count = sqlite3_column_int(stmt, 0);
+        count = sqlite3_column_int64(stmt, 0);
     }
     sqlite3_finalize(stmt);
     return count;

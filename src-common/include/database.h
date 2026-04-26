@@ -22,7 +22,7 @@ void create_event(const Event& event);
 std::optional<Event> get_and_set_in_progress_next_event(const std::string& client_id = "");
 
 // Returns the number of pending events for a client (or all if client_id is empty).
-int get_pending_event_count(const std::string& client_id = "");
+uint64_t get_pending_event_count(const std::string& client_id = "");
 
 // Removes an event by id.
 void remove_event(int id);

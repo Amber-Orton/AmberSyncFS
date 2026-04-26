@@ -21,7 +21,7 @@ int server_port = 0;
 std::string track_root;
 std::atomic_ulong event_counter{0};
 std::string data_dir;
-std::atomic_uint32_t pending_events{0};
+std::atomic_uint64_t pending_events{0};
 std::condition_variable events_cv;
 unsigned int num_threads;
 

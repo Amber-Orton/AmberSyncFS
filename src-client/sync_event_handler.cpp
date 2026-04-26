@@ -49,7 +49,7 @@ void handle_events() {
                     continue;
                 }
 
-            } else if (uint32_t events = pending_events.fetch_sub(1) > 0) {
+            } else if (uint64_t events = pending_events.fetch_sub(1) > 0) {
 
                 // deal with pending events only if not handling local event
                 std::cout << events << " pending events remaining processing one now\n";

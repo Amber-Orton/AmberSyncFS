@@ -21,6 +21,7 @@
 #include "send_recive_helper.h"
 #include "database.h"
 #include "file_lock.h"
+#include "command.h"
 
 
 // functions to handle sending and reciving events
@@ -28,6 +29,16 @@
 // use safe_SSL_write and safe_SSL_read for all SSL interactions to properly handle errors and disconnections
 // connections should be established using the try_establish_connection
 // and ending the connection is down to the initialiser of the connection
+
+
+// connection follows this pattern for every event:
+// (each step first send size of data for this step as uint64_t in network byte order, then send the data itself)
+// Client: sends their name
+// Client: sends command (no length needed since all commands are same length and can be read in one go)
+// where needed Client: sends file/directory name
+// where needed Client: sends file modification time as uint64_t in network byte order
+// where needed Client: sends file data
+// Server: sends number of pending events for the client as uint64_t in network byte order (no length needed since it's always the same size)
 
 int send_file_tls(std::string relative_start_directory, std::string relative_file_path, Connection* conn) {
     
@@ -49,7 +60,7 @@ int send_file_tls(std::string relative_start_directory, std::string relative_fil
     
     // Send file name length and name
     std::string filename = relative_file_path; // Send relative path for server dir structure
-    uint32_t name_len = htonl(filename.size());
+    uint64_t name_len = htonl(filename.size());
     if (safe_SSL_write(conn, &name_len, sizeof(name_len)) < 0) {
         std::cerr << "Failed to send file name length\n";
         return -1;
@@ -103,7 +114,7 @@ int send_delete_file_tls(std::string relative_start_directory, std::string relat
 
     // Send file name length and name
     std::string filename = relative_file_path; // Send relative path for server dir structure
-    uint32_t name_len = htonl(filename.size());
+    uint64_t name_len = htonl(filename.size());
     if (safe_SSL_write(conn, &name_len, sizeof(name_len)) < 0) {
         std::cerr << "Failed to send file name length\n";
         return -1;
@@ -134,7 +145,7 @@ int send_directory_tls(std::string relative_start_directory, std::string relativ
 
     // Send directory name length and name
     std::string dirname = relative_directory_path; // Send relative path for server dir structure
-    uint32_t name_len = htonl(dirname.size());
+    uint64_t name_len = htonl(dirname.size());
     if (safe_SSL_write(conn, &name_len, sizeof(name_len)) < 0) {
         std::cerr << "Failed to send directory name length\n";
         return -1;
@@ -167,7 +178,7 @@ int send_delete_directory_tls(std::string relative_start_directory, std::string 
 
     // Send directory name length and name
     std::string dirname = relative_directory_path; // Send relative path for server dir structure
-    uint32_t name_len = htonl(dirname.size());
+    uint64_t name_len = htonl(dirname.size());
     if (safe_SSL_write(conn, &name_len, sizeof(name_len)) < 0) {
         std::cerr << "Failed to send directory name length\n";
         return -1;
@@ -188,7 +199,7 @@ int send_delete_directory_tls(std::string relative_start_directory, std::string 
 
 int receive_file_tls(std::string relative_start_directory, Connection* conn, Event* out_event) {
     // read file name length and name
-    uint32_t name_len = 0;
+    uint64_t name_len = 0;
     int n1 = safe_SSL_read(conn, &name_len, sizeof(name_len));
     if (n1 <= 0) {
         std::cerr << "Failed to read file name length\n" << std::flush;
@@ -319,7 +330,7 @@ int receive_file_tls(std::string relative_start_directory, Connection* conn, Eve
 }
 
 int receive_delete_file_tls(std::string relative_start_directory, Connection* conn, Event* out_event) {
-    uint32_t name_len = 0;
+    uint64_t name_len = 0;
     int n1 = safe_SSL_read(conn, &name_len, sizeof(name_len));
     if (n1 <= 0) {
         std::cerr << "Failed to read file name length for deletion\n" << std::flush;
@@ -389,7 +400,7 @@ int receive_delete_file_tls(std::string relative_start_directory, Connection* co
 }
 
 int receive_directory_tls(std::string relative_start_directory, Connection* conn, Event* out_event) {
-    uint32_t name_len = 0;
+    uint64_t name_len = 0;
     int n1 = safe_SSL_read(conn, &name_len, sizeof(name_len));
     if (n1 <= 0) {
         std::cerr << "Failed to read directory name length\n" << std::flush;
@@ -454,7 +465,7 @@ int receive_directory_tls(std::string relative_start_directory, Connection* conn
 }
 
 int receive_delete_directory_tls(std::string relative_start_directory, Connection* conn, Event* out_event) {
-    uint32_t name_len = 0;
+    uint64_t name_len = 0;
     int n1 = safe_SSL_read(conn, &name_len, sizeof(name_len));
     if (n1 <= 0) {
         std::cerr << "Failed to read directory name length\n" << std::flush;
@@ -537,87 +548,94 @@ int send_request_handle_pending_event_tls(Connection* conn, std::string relative
 
 int handle_incoming_event(Connection* conn, std::string relative_start_directory, Event* out_event) {
     // Read command from client
-    char command[2];
+    CommandType *command;
     int bytes_read = safe_SSL_read(conn, command, sizeof(command)); // Read command type (e.g., "UP" for upload)
     if (bytes_read <= 0) {
         std::cerr << "Failed to read command from client\n";
         return -1;
     }
     if (out_event) {
-        out_event->type = std::string(command, 2);
+        out_event->type = *command;
     }
 
 
     // Handle command, its the programmers responsibility to ensure that commands are all distinct and of a fixed length
     // each in a thread, allows infinite clients to connect and send commands without blocking each other
     // means can be DOSed by opening many connections and sending commands without closing them but clients are certified and assumed to be non-malicious
-    if (std::strncmp(command, "UF", 2) == 0) {
-        std::cout << "Received upload command from client\n";
-        int result = receive_file_tls(relative_start_directory, conn, out_event);
-        if (result < 0) {
-            std::cerr << "Failed to receive file\n";
-        }
-        return result;
-    } else if (std::strncmp(command, "DF", 2) == 0) {
-        std::cout << "Received delete command from client\n";
-        int result = receive_delete_file_tls(relative_start_directory, conn, out_event);
-        if (result < 0) {
-            std::cerr << "Failed to delete file\n";
-        }
-        return result;
-    } else if (std::strncmp(command, "UD", 2) == 0) {
-        std::cout << "Received upload directory command from client\n";
-        int result = receive_directory_tls(relative_start_directory, conn, out_event);
-        if (result < 0) {
-            std::cerr << "Failed to receive directory\n";
-        }
-        return result;
-    } else if (std::strncmp(command, "DD", 2) == 0) {
-        std::cout << "Received delete directory command from client\n";
-        int result = receive_delete_directory_tls(relative_start_directory, conn, out_event);
-        if (result < 0) {
-            std::cerr << "Failed to delete directory\n";
-        }
-        return result;
-    } else if (std::strncmp(command, "RP", 2) == 0) {
-        std::cout << "Received request pending events command from client\n";
-        return 0; // No error, but no event data to return for this command
-    } else {
-        std::cerr << "Unknown command received from client: " << std::string(command, 2) << "\n";
-        return -1;
+    
+    switch (*command) {
+        case CommandType::UPLOAD_FILE:
+            std::cout << "Received upload command from client\n";
+            int result = receive_file_tls(relative_start_directory, conn, out_event);
+            if (result < 0) {
+                std::cerr << "Failed to receive file\n";
+            }
+            return result;
+        case CommandType::DELETE_FILE:
+            std::cout << "Received delete command from client\n";
+            int result = receive_delete_file_tls(relative_start_directory, conn, out_event);
+            if (result < 0) {
+                std::cerr << "Failed to delete file\n";
+            }
+            return result;
+        case CommandType::UPLOAD_DIRECTORY:
+            std::cout << "Received upload directory command from client\n";
+            int result = receive_directory_tls(relative_start_directory, conn, out_event);
+            if (result < 0) {
+                std::cerr << "Failed to receive directory\n";
+            }
+            return result;
+        case CommandType::DELETE_DIRECTORY:
+            std::cout << "Received delete directory command from client\n";
+            int result = receive_delete_directory_tls(relative_start_directory, conn, out_event);
+            if (result < 0) {
+                std::cerr << "Failed to delete directory\n";
+            }
+            return result;
+        case CommandType::REQUEST_PENDING_EVENTS:
+            std::cout << "Received request pending events command from client\n";
+            return 0; // No error, but no event data to return for this command
+        default:
+            std::cerr << "Unknown command received from client: " << *command << "\n";
+            return -1;
     }
 }
 
 int handle_send_event(Connection* conn, std::string relative_start_directory, Event* event) {
     // process the event
     if (event->path != "." && event->path != "..") {
-        if (event->type == "UF") {
-            printf("Processing upload file event for path: %s\n", event->path.c_str());
-            if (send_file_tls(relative_start_directory, event->path, conn) < 0) {
-                std::cerr << "Failed to send file: " << event->path << "\n";
-                return -1;
-            }
-        } else if (event->type == "DF") {
-            printf("Processing delete file event for path: %s\n", event->path.c_str());
-            if (send_delete_file_tls(relative_start_directory, event->path, event->timestamp, conn) < 0) {
-                std::cerr << "Failed to send delete file request: " << event->path << "\n";
-                return -1;
-            }
-        } else if (event->type == "UD") {
-            printf("Processing upload directory event for path: %s\n", event->path.c_str());
-            if (send_directory_tls(relative_start_directory, event->path, conn) < 0) {
-                std::cerr << "Failed to send directory: " << event->path << "\n";
-                return -1;
-            }
-        } else if (event->type == "DD") {
-            printf("Processing delete directory event for path: %s\n", event->path.c_str());
-            if (send_delete_directory_tls(relative_start_directory, event->path, event->timestamp, conn) < 0) {
-                std::cerr << "Failed to send delete directory request: " << event->path << "\n";
-                return -1;
-            }
-        } else {
-            std::cerr << "Unknown event type: " << event->type << " for path: " << event->path << "\n";
-            return -2; // return -2 to indicate unknown event type
+        switch (event->type) {
+            case CommandType::UPLOAD_FILE:
+                printf("Processing upload file event for path: %s\n", event->path.c_str());
+                if (send_file_tls(relative_start_directory, event->path, conn) < 0) {
+                    std::cerr << "Failed to send file: " << event->path << "\n";
+                    return -1;
+                }
+                break;
+            case CommandType::DELETE_FILE:
+                printf("Processing delete file event for path: %s\n", event->path.c_str());
+                if (send_delete_file_tls(relative_start_directory, event->path, event->timestamp, conn) < 0) {
+                    std::cerr << "Failed to send delete file request: " << event->path << "\n";
+                    return -1;
+                }
+                break;
+            case CommandType::UPLOAD_DIRECTORY:
+                printf("Processing upload directory event for path: %s\n", event->path.c_str());
+                if (send_directory_tls(relative_start_directory, event->path, conn) < 0) {
+                    std::cerr << "Failed to send directory: " << event->path << "\n";
+                    return -1;
+                }
+                break;
+            case CommandType::DELETE_DIRECTORY:
+                printf("Processing delete directory event for path: %s\n", event->path.c_str());
+                if (send_delete_directory_tls(relative_start_directory, event->path, event->timestamp, conn) < 0) {
+                    std::cerr << "Failed to send delete directory request: " << event->path << "\n";
+                    return -1;
+                }
+                break;
+            default:
+                std::cerr << "Unknown event type: " << event->type << " for path: " << event->path << "\n";
+                return -2; // return -2 to indicate unknown event type
         }
         std::cout << "Processed event: " << event->type << " for path: " << event->path << "\n";
         return 0;
