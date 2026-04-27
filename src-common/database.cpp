@@ -110,7 +110,7 @@ std::optional<Event> get_and_set_in_progress_next_event(const std::string& clien
         row_event.path = reinterpret_cast<const char*>(sqlite3_column_text(stmt, 2));
         row_event.timestamp = static_cast<uint64_t>(sqlite3_column_int64(stmt, 3));
         event = row_event;
-        std::cerr << "[database.cpp:get_and_set_in_progress_next_event] Found event: id=" << id << ", type=" << static_cast<int>(row_event.type) << ", payload='" << row_event.path << "', timestamp=" << row_event.timestamp << std::endl;
+        std::cerr << "[database.cpp:get_and_set_in_progress_next_event] Found event: id=" << id << ", client_id='" << row_event.client_id << "', type=" << static_cast<int>(row_event.type) << ", payload='" << row_event.path << "', timestamp=" << row_event.timestamp << std::endl;
         // set the event as in_progress
         sqlite3_stmt* set_in_progress_stmt;
         const char* set_in_progress_sql = "UPDATE events SET in_progress = 1 WHERE id = ?;";

@@ -48,8 +48,8 @@ int main(int argc, char *argv[]) {
         std::cerr << "[server.cpp:main] Provided path is not a valid directory: " << data_directory << "\n";
         return 1;
     }
-    if (!open_db(data_directory + "/deleted_file_times.db")) {
-        std::cerr << "[server.cpp:main] Failed to initialize server database at: " << data_directory + "/deleted_file_times.db" << "\n";
+    if (!open_db(data_directory + "/events.db")) {
+        std::cerr << "[server.cpp:main] Failed to initialize server database at: " << data_directory + "/events.db" << "\n";
         return 1;
     }
     reset_in_progress_events(); // reset any events that were in progress
@@ -211,15 +211,19 @@ void end_of_connection(Connection* conn, Event& event) {
     close_connection(conn);
 
     // create events for all other clients to process the changes from this client
-    std::cout << "[server.cpp:end_of_connection] Creating events for other clients to process changes from client '" << event.client_id << "for event: " << event.type << ":" << event.path << "'\n";
     auto origional_client_id = event.client_id;
-    for (std::string user : get_users()) {
-        std::cout << "[server.cpp:end_of_connection] Checking if event for user '" << user << "' needs to be created\n";
-        if (user != origional_client_id) {
-            std::cout << "[server.cpp:end_of_connection] Creating event for user '" << user << "' to process changes from client '" << origional_client_id << "'\n";
-            event.client_id = user;
-            create_event(event);
+    if (event.type != CommandType::UNKNOWN && event.type != CommandType::REQUEST_NEXT_PENDING_EVENT && event.type != CommandType::REQUEST_NUMBER_PENDING_EVENTS) { 
+        std::cout << "[server.cpp:end_of_connection] Creating events for other clients to process changes from client '" << event.client_id << "for event: " << event.type << ":" << event.path << "'\n";
+        for (std::string user : get_users()) {
+            std::cout << "[server.cpp:end_of_connection] Checking if event for user '" << user << "' needs to be created\n";
+            if (user != origional_client_id) {
+                std::cout << "[server.cpp:end_of_connection] Creating event for user '" << user << "' to process changes from client '" << origional_client_id << "'\n";
+                event.client_id = user;
+                create_event(event);
+            }
         }
+    } else {
+        std::cout << "[server.cpp:end_of_connection] No events to create for other clients for event: " << event.type << ":" << event.path << "\n";
     }
 
     std::cout << "[server.cpp:end_of_connection] Finished everything for client '" << origional_client_id << "'\n";
