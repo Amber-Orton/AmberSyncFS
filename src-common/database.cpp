@@ -53,6 +53,10 @@ bool open_db(const std::string& db_path) {
 
 // Create an event in the events table
 void create_event(const CommandType& type, const std::string& payload, uint64_t timestamp, const std::string& client_id = "") {
+    if (type == CommandType::UNKNOWN) {
+        std::cerr << "[database.cpp:create_event] Attempted to create event with UNKNOWN type. Event not created.\n";
+        return;
+    }
     
     std::lock_guard<std::mutex> lock(db_mutex);
     if (!db) {
