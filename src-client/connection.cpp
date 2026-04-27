@@ -162,13 +162,14 @@ int start_of_connection(Connection* conn) {
 
 int end_of_connection(Connection* conn) {
     if (!conn) return -1;
+    std::cout << "Waiting for pending events from server...\n";
     uint64_t num_events_net;
     if (safe_SSL_read(conn, &num_events_net, sizeof(num_events_net)) <= 0) {
         std::cerr << "Failed to read number of pending events from server\n";
-        close_connection(conn);
-        return -1;
+        return close_connection(conn);
     }
     uint64_t num_events = ntohl(num_events_net);
+    std::cout << "Number of pending events from server: " << num_events << "\n";
     pending_events.store(num_events);
     for (uint64_t i = 0; i < num_events && i < num_threads; ++i) {
         events_cv.notify_one();

@@ -174,7 +174,7 @@ int main(int argc, char *argv[]) {
                 return;
             }
 
-            if (event.type == CommandType::REQUEST_PENDING_EVENTS) {
+            if (event.type == CommandType::REQUEST_NEXT_PENDING_EVENT) {
                 // Client requested a pending event
                 if (auto event = get_and_set_in_progress_next_event(client_name)) {
                     // sned the event to the client
@@ -200,16 +200,21 @@ void end_of_connection(Connection* conn, Event& event) {
     // send number of events that the client need to process
     uint64_t num_events = get_pending_event_count(event.client_id);
     uint64_t num_events_net = htonl(num_events);
+    std::cout << "Number of pending events for client '" << event.client_id << "': " << num_events << "\n";
     if (safe_SSL_write(conn, &num_events_net, sizeof(num_events_net)) < 0) {
         std::cerr << "Failed to send number of pending events to client: " << event.client_id << "\n";
     }
 
+    std::cout << "Closing connection with client: " << event.client_id << "\n";
     close_connection(conn);
 
     // create events for all other clients to process the changes from this client
+    std::cout << "Creating events for other clients to process changes from client '" << event.client_id << "for event: " << event.type << ":" << event.path << "'\n";
     auto origional_client_id = event.client_id;
     for (std::string user : get_users()) {
+        std::cout << "Checking if event for user '" << user << "' needs to be created\n";
         if (user != origional_client_id) {
+            std::cout << "Creating event for user '" << user << "' to process changes from client '" << origional_client_id << "'\n";
             event.client_id = user;
             create_event(event);
         }

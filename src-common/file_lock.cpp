@@ -2,6 +2,7 @@
 #include <condition_variable>
 #include <set>
 #include <filesystem>
+#include <iostream>
 
 std::mutex file_lock_mutex;
 std::condition_variable file_lock_cv;
@@ -15,6 +16,7 @@ void lock_file(const std::string& path) {
         file_lock_cv.wait(map_lock);
     }
     file_locks.insert(norm_str);
+    std::cout << "Locked file: " << norm_str << "\n";
 }
 
 void unlock_file(const std::string& path) {
@@ -23,4 +25,5 @@ void unlock_file(const std::string& path) {
     std::unique_lock<std::mutex> map_lock(file_lock_mutex);
     file_locks.erase(norm_str);
     file_lock_cv.notify_all();
+    std::cout << "Unlocked file: " << norm_str << "\n";
 }

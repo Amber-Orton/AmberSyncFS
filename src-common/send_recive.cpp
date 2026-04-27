@@ -49,7 +49,12 @@ int send_file_tls(std::string relative_start_directory, std::string relative_fil
     // Open file
     std::ifstream file(full_path, std::ios::binary);
     if (!file) {
-        std::cerr << "Failed to open file\n";
+        std::cerr << "Failed to open file, just requesting number of pending events\n";
+        CommandType command = CommandType::REQUEST_NUMBER_PENDING_EVENTS; // Send a command to indicate failure but still close connection gracefully
+        if (safe_SSL_write(conn, &command, sizeof(command)) < 0) { // Send a command to indicate failure but still close connection gracefully
+            std::cerr << "Failed to send request number of pending events command\n";
+            return -1;
+        }
         return 1; // return 1 to indicate failure but do not retry as this is likely an issue with the file itself and not the connection
     }
 
@@ -246,17 +251,7 @@ int receive_file_tls(std::string relative_start_directory, Connection* conn, Eve
         out_event->timestamp = mod_time;
     }
 
-    auto current_mod_time = get_file_modification_time(relative_start_directory + "/" + filename);
-    if (mod_time <= current_mod_time) {
-        std::cerr << "Received file is not newer than existing file. Skipping update for '" << filename << "'\n" << std::flush;
-        // Still need to read the incoming file data to clear the SSL buffer, but we can discard it since it's not newer
-        char discard_buffer[4096];
-        while (safe_SSL_read(conn, discard_buffer, sizeof(discard_buffer)) > 0) {
-            // Discard data
-        }
-        return 1; // Not an error, just no update needed
-    }
-
+    
     // read file size
     uint64_t bits_left_net = 0;
     if (safe_SSL_read(conn, &bits_left_net, sizeof(bits_left_net)) < 0) {
@@ -264,6 +259,23 @@ int receive_file_tls(std::string relative_start_directory, Connection* conn, Eve
         return -1;
     }
     uint64_t bits_left = ntohll(bits_left_net);
+    
+    auto current_mod_time = get_file_modification_time(relative_start_directory + "/" + filename);
+    if (mod_time <= current_mod_time) {
+        std::cerr << "Received file is not newer than existing file. Skipping update for '" << filename << "'\n" << std::flush;
+        // Still need to read the incoming file data to clear the SSL buffer, but we can discard it since it's not newer
+        char buffer[4096];
+        while (bits_left > 0) {
+            int bits_to_read = (bits_left < sizeof(buffer)) ? bits_left : sizeof(buffer);
+            int n = safe_SSL_read(conn, buffer, bits_to_read);
+            if (n <= 0) {
+                std::cerr << "Failed to read file data for skipped update\n" << std::flush;
+                return -1;
+            }
+            bits_left -= n;
+        }
+        return 1; // Not an error, just no update needed
+    }
 
     // Open file for writing move old file to temp to avaoid issues with lost connections
     auto old_exists = std::filesystem::exists(output_path);
@@ -358,7 +370,6 @@ int receive_delete_file_tls(std::string relative_start_directory, Connection* co
     std::filesystem::path file_path(relative_start_directory);
     file_path.append(filename);
     FileLockGuard guard(file_path.lexically_normal().string()); // Lock normalized file path
-
 
 
     // update out_event
@@ -543,7 +554,7 @@ int receive_delete_directory_tls(std::string relative_start_directory, Connectio
 
 int send_request_handle_pending_event_tls(Connection* conn, std::string relative_start_directory) {
     if (!conn) return -1;
-    CommandType command = CommandType::REQUEST_PENDING_EVENTS;
+    CommandType command = CommandType::REQUEST_NEXT_PENDING_EVENT;
     if (safe_SSL_write(conn, &command, sizeof(command)) < 0) {
         std::cerr << "Failed to send request pending events command\n";
         return -1;
@@ -597,9 +608,12 @@ int handle_incoming_event(Connection* conn, std::string relative_start_directory
                 std::cerr << "Failed to delete directory\n";
             }
             return result;
-        } case CommandType::REQUEST_PENDING_EVENTS: {
+        } case CommandType::REQUEST_NEXT_PENDING_EVENT: {
             std::cout << "Received request pending events command from client\n";
             return 0; // No error, but no event data to return for this command
+        } case CommandType::REQUEST_NUMBER_PENDING_EVENTS: {
+            std::cout << "Received request number of pending events command from client\n";
+            return 0; // Nothing to be done just close the connetion
         } default: {
             std::cerr << "Unknown command received from client: " << command << "\n";
             return -1;

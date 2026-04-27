@@ -69,11 +69,15 @@ void handle_events() {
                     continue;
                 }
             }
-            end_of_connection(conn);
+
+            if (end_of_connection(conn) < 0) {
+                std::cerr << "Failed to finalize server connection\n";
+            }
         } else {
             // Use a dummy mutex and defer_lock to avoid creating a new mutex every time
             std::unique_lock<std::mutex> wait_lock(dummy_mutex, std::defer_lock);
             events_cv.wait_for(wait_lock, std::chrono::seconds(1));
+            std::cout << "woke up" << std::endl;
         }
     }
 }
