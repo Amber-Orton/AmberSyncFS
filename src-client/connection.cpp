@@ -48,7 +48,7 @@ Connection* try_establish_connection(const std::string& server_ip, int port) {
             if (time_since_last_attempt < connection_retry_timeout) {
                 double jitter = 0.9 + (rand() % 21) / 100.0; // 0.90 to 1.10
                 auto wait_time = std::chrono::duration_cast<std::chrono::milliseconds>((connection_retry_timeout - time_since_last_attempt) * jitter);
-                std::cout << "Waiting before next connection attempt for " << wait_time << "\n";
+                std::cout << "[connection.cpp:try_establish_connection] Waiting before next connection attempt for " << wait_time << "\n";
                 std::this_thread::sleep_for(wait_time);
             }
             // attempt connection
@@ -57,7 +57,7 @@ Connection* try_establish_connection(const std::string& server_ip, int port) {
             if (conn != nullptr) {
                 is_connected.store(true);
                 connection_retry_timeout = std::chrono::seconds(1); // reset retry timeout after successful connection
-                std::cout << "Successfully established connection to server\n";
+                std::cout << "[connection.cpp:try_establish_connection] Successfully established connection to server\n";
                 return conn;
             } else {
                 connection_retry_timeout = std::min(connection_retry_timeout * 2, max_retry_timeout);
@@ -75,14 +75,14 @@ Connection* establish_connection(const std::string& server_ip, int port) {
 
     SSL_CTX* ctx = SSL_CTX_new(TLS_client_method());
     if (!ctx) {
-        std::cerr << "Failed to create SSL_CTX\n";
+        std::cerr << "[connection.cpp:establish_connection] Failed to create SSL_CTX\n";
         return nullptr;
     }
 
 
     // Load CA or server certificate for validation
     if (SSL_CTX_load_verify_locations(ctx, "certs/ca.crt", nullptr) != 1) {
-        std::cerr << "Failed to load CA/server certificate for validation\n";
+        std::cerr << "[connection.cpp:establish_connection] Failed to load CA/server certificate for validation\n";
         SSL_CTX_free(ctx);
         return nullptr;
     }
@@ -91,7 +91,7 @@ Connection* establish_connection(const std::string& server_ip, int port) {
     // Load client certificate and private key for mutual authentication
     if (SSL_CTX_use_certificate_file(ctx, "certs/client.crt", SSL_FILETYPE_PEM) <= 0 ||
         SSL_CTX_use_PrivateKey_file(ctx, "certs/client.key", SSL_FILETYPE_PEM) <= 0) {
-        std::cerr << "Failed to load client cert/key for mutual TLS\n";
+        std::cerr << "[connection.cpp:establish_connection] Failed to load client cert/key for mutual TLS\n";
         SSL_CTX_free(ctx);
         return nullptr;
     }
@@ -99,7 +99,7 @@ Connection* establish_connection(const std::string& server_ip, int port) {
     // Create socket
     int sock = socket(AF_INET, SOCK_STREAM, 0);
     if (sock < 0) {
-        std::cerr << "Socket creation failed\n";
+        std::cerr << "[connection.cpp:establish_connection] Socket creation failed\n";
         SSL_CTX_free(ctx);
         return nullptr;
     }
@@ -110,7 +110,7 @@ Connection* establish_connection(const std::string& server_ip, int port) {
     inet_pton(AF_INET, server_ip.c_str(), &server_addr.sin_addr);
 
     if (connect(sock, (sockaddr*)&server_addr, sizeof(server_addr)) < 0) {
-        std::cerr << "Connection failed\n";
+        std::cerr << "[connection.cpp:establish_connection] Connection failed\n";
         close(sock);
         SSL_CTX_free(ctx);
         return nullptr;
@@ -121,7 +121,7 @@ Connection* establish_connection(const std::string& server_ip, int port) {
     SSL_set_fd(ssl, sock);
 
     if (SSL_connect(ssl) <= 0) {
-        std::cerr << "SSL handshake failed\n";
+        std::cerr << "[connection.cpp:establish_connection] SSL handshake failed\n";
         SSL_free(ssl);
         close(sock);
         SSL_CTX_free(ctx);
@@ -131,7 +131,7 @@ Connection* establish_connection(const std::string& server_ip, int port) {
     // Verify server certificate
     long verify_result = SSL_get_verify_result(ssl);
     if (verify_result != X509_V_OK) {
-        std::cerr << "Server certificate verification failed: " << X509_verify_cert_error_string(verify_result) << "\n";
+        std::cerr << "[connection.cpp:establish_connection] Server certificate verification failed: " << X509_verify_cert_error_string(verify_result) << "\n";
         shutdown_ssl(ssl);
         SSL_free(ssl);
         close(sock);
@@ -150,11 +150,11 @@ int start_of_connection(Connection* conn) {
     // send device name length and name
     uint64_t name_len = htonl(static_cast<uint64_t>(device_name.size()));
     if (safe_SSL_write(conn, &name_len, sizeof(name_len)) < 0) {
-        std::cerr << "Failed to send device name length\n";
+        std::cerr << "[connection.cpp:start_of_connection] Failed to send device name length\n";
         return -1;
     }
     if (safe_SSL_write(conn, device_name.c_str(), device_name.size()) < 0) {
-        std::cerr << "Failed to send device name\n";
+        std::cerr << "[connection.cpp:start_of_connection] Failed to send device name\n";
         return -1;
     }
     return 0;
@@ -162,14 +162,14 @@ int start_of_connection(Connection* conn) {
 
 int end_of_connection(Connection* conn) {
     if (!conn) return -1;
-    std::cout << "Waiting for pending events from server...\n";
+    std::cout << "[connection.cpp:end_of_connection] Waiting for pending events from server...\n";
     uint64_t num_events_net;
     if (safe_SSL_read(conn, &num_events_net, sizeof(num_events_net)) <= 0) {
-        std::cerr << "Failed to read number of pending events from server\n";
+        std::cerr << "[connection.cpp:end_of_connection] Failed to read number of pending events from server\n";
         return close_connection(conn);
     }
     uint64_t num_events = ntohl(num_events_net);
-    std::cout << "Number of pending events from server: " << num_events << "\n";
+    std::cout << "[connection.cpp:end_of_connection] Number of pending events from server: " << num_events << "\n";
     pending_events.store(num_events);
     for (uint64_t i = 0; i < num_events && i < num_threads; ++i) {
         events_cv.notify_one();
@@ -182,7 +182,7 @@ int close_connection(Connection* conn) {
 
     auto shutdown_result = shutdown_ssl(conn->ssl);
     if (shutdown_result < 0) {
-        std::cerr << "Failed to shutdown SSL connection properly\n";
+        std::cerr << "[connection.cpp:close_connection] Failed to shutdown SSL connection properly\n";
     }
 
     SSL_free(conn->ssl);
@@ -198,7 +198,7 @@ int shutdown_ssl(SSL* ssl) {
     do {
         shutdown_result = SSL_shutdown(ssl);
         if (shutdown_result != 1 && shutdown_result != 0) {
-            std::cerr << "SSL shutdown failed\n";
+            std::cerr << "[connection.cpp:shutdown_ssl] SSL shutdown failed\n";
         }
     } while (shutdown_result == 0);
     return shutdown_result;

@@ -24,7 +24,7 @@ std::string data_directory;
 
 int main(int argc, char *argv[]) {
 	if (argc != 4) {
-		fprintf(stderr, "Usage: %s <port> <tracked_files_directory> <data_directory>\n", argv[0]);
+        fprintf(stderr, "[server.cpp:main] Usage: %s <port> <tracked_files_directory> <data_directory>\n", argv[0]);
 		return 1;
 	}
 
@@ -32,24 +32,24 @@ int main(int argc, char *argv[]) {
     // and check that they exist and are valid
     port = std::stoi(argv[1]);
     if (port <= 0 || port > 65535) {
-        std::cerr << "Invalid port number: " << port << "\n";
+        std::cerr << "[server.cpp:main] Invalid port number: " << port << "\n";
         return 1;
     }
     // and check that it exists and is a directory
     tracked_files_directory = argv[2];
     if (!std::filesystem::exists(tracked_files_directory) || !std::filesystem::is_directory(tracked_files_directory)) {
-        std::cerr << "Provided path is not a valid directory: " << tracked_files_directory << "\n";
+        std::cerr << "[server.cpp:main] Provided path is not a valid directory: " << tracked_files_directory << "\n";
         return 1;
     }
 
     // check data_directory and open database
     data_directory = argv[3];
     if (!std::filesystem::exists(data_directory) || !std::filesystem::is_directory(data_directory)) {
-        std::cerr << "Provided path is not a valid directory: " << data_directory << "\n";
+        std::cerr << "[server.cpp:main] Provided path is not a valid directory: " << data_directory << "\n";
         return 1;
     }
     if (!open_db(data_directory + "/deleted_file_times.db")) {
-        std::cerr << "Failed to initialize server database at: " << data_directory + "/deleted_file_times.db" << "\n";
+        std::cerr << "[server.cpp:main] Failed to initialize server database at: " << data_directory + "/deleted_file_times.db" << "\n";
         return 1;
     }
     reset_in_progress_events(); // reset any events that were in progress
@@ -60,19 +60,19 @@ int main(int argc, char *argv[]) {
     OpenSSL_add_all_algorithms();
     SSL_CTX* ctx = SSL_CTX_new(TLS_server_method());
     if (!ctx) {
-        std::cerr << "Failed to create SSL_CTX\n";
+        std::cerr << "[server.cpp:main] Failed to create SSL_CTX\n";
         return 1;
     }
     if (SSL_CTX_use_certificate_file(ctx, "certs/server.crt", SSL_FILETYPE_PEM) <= 0 ||
         SSL_CTX_use_PrivateKey_file(ctx, "certs/server.key", SSL_FILETYPE_PEM) <= 0) {
-        std::cerr << "Failed to load cert/key\n";
+        std::cerr << "[server.cpp:main] Failed to load cert/key\n";
         SSL_CTX_free(ctx);
         return 1;
     }
 
     // Load CA or client certificate for client verification
     if (SSL_CTX_load_verify_locations(ctx, "certs/ca.crt", nullptr) != 1) {
-        std::cerr << "Failed to load CA/client certificate for client verification\n";
+        std::cerr << "[server.cpp:main] Failed to load CA/client certificate for client verification\n";
         SSL_CTX_free(ctx);
         return 1;
     }
@@ -80,14 +80,14 @@ int main(int argc, char *argv[]) {
 
     int server_fd = socket(AF_INET, SOCK_STREAM, 0);
     if (server_fd < 0) {
-        std::cerr << "Failed to create server socket: " << strerror(errno) << "\n";
+        std::cerr << "[server.cpp:main] Failed to create server socket: " << strerror(errno) << "\n";
         SSL_CTX_free(ctx);
         return 1;
     }
 
     int reuse_addr = 1;
     if (setsockopt(server_fd, SOL_SOCKET, SO_REUSEADDR, &reuse_addr, sizeof(reuse_addr)) < 0) {
-        std::cerr << "Failed to set SO_REUSEADDR: " << strerror(errno) << "\n";
+        std::cerr << "[server.cpp:main] Failed to set SO_REUSEADDR: " << strerror(errno) << "\n";
         close(server_fd);
         SSL_CTX_free(ctx);
         return 1;
@@ -99,34 +99,34 @@ int main(int argc, char *argv[]) {
     address.sin_port = htons(port);
 
     if (bind(server_fd, (sockaddr*)&address, sizeof(address)) < 0) {
-        std::cerr << "Failed to bind server socket on port " << port << ": " << strerror(errno) << "\n";
+        std::cerr << "[server.cpp:main] Failed to bind server socket on port " << port << ": " << strerror(errno) << "\n";
         close(server_fd);
         SSL_CTX_free(ctx);
         return 1;
     }
 
     if (listen(server_fd, SOMAXCONN) < 0) {
-        std::cerr << "Failed to listen on server socket: " << strerror(errno) << "\n";
+        std::cerr << "[server.cpp:main] Failed to listen on server socket: " << strerror(errno) << "\n";
         close(server_fd);
         SSL_CTX_free(ctx);
         return 1;
     }
 
-    std::cout << "TLS server listening on port " << port << std::endl;
+    std::cout << "[server.cpp:main] TLS server listening on port " << port << std::endl;
 
     while (true) {
         sockaddr_in client_addr{};
         socklen_t client_len = sizeof(client_addr);
         int client_fd = accept(server_fd, (sockaddr*)&client_addr, &client_len);
         if (client_fd < 0) {
-            std::cerr << "Failed to accept client connection\n";
+            std::cerr << "[server.cpp:main] Failed to accept client connection\n";
             continue;
         }
         
         SSL* ssl = SSL_new(ctx);
         SSL_set_fd(ssl, client_fd);
         if (SSL_accept(ssl) <= 0) {
-            std::cerr << "SSL handshake failed\n";
+            std::cerr << "[server.cpp:main] SSL handshake failed\n";
             SSL_free(ssl);
             close(client_fd);
             continue;
@@ -139,7 +139,7 @@ int main(int argc, char *argv[]) {
         // Verify client certificate
         long verify_result = SSL_get_verify_result(ssl);
         if (verify_result != X509_V_OK) {
-            std::cerr << "Client certificate verification failed: " << X509_verify_cert_error_string(verify_result) << "\n";
+            std::cerr << "[server.cpp:main] Client certificate verification failed: " << X509_verify_cert_error_string(verify_result) << "\n";
             shutdown_ssl(ssl);
             SSL_free(ssl);
             close(client_fd);
@@ -150,36 +150,38 @@ int main(int argc, char *argv[]) {
             // read client name length and name
             uint64_t client_name_len = 0;
             if (safe_SSL_read(conn, &client_name_len, sizeof(client_name_len)) <= 0) {
-                std::cerr << "Failed to read client name length\n";
+                std::cerr << "[server.cpp:main] Failed to read client name length\n";
                 close_connection(conn);
                 return;
             }
             client_name_len = ntohl(client_name_len);
             std::vector<char> client_name_ch(client_name_len + 1);
             if (safe_SSL_read(conn, client_name_ch.data(), client_name_len) <= 0) {
-                std::cerr << "Failed to read client name\n";
+                std::cerr << "[server.cpp:main] Failed to read client name\n";
                 close_connection(conn);
                 return;
             }
             client_name_ch[client_name_len] = '\0'; // Null-terminate the client name
-            std::cout << "Client connected with name: " << client_name_ch.data() << "\n";
+            std::cout << "[server.cpp:main] Client connected with name: " << client_name_ch.data() << "\n";
             std::string client_name = std::string(client_name_ch.data());
+
+            add_user(client_name); // add the client to the database if it doesnt exist
 
             Event event;
             event.client_id = client_name;
 
             if (handle_incoming_event(conn, tracked_files_directory, &event) < 0) {
-                std::cerr << "Error handling incoming event from client: " << client_name << "\n";
+                std::cerr << "[server.cpp:main] Error handling incoming event from client: " << client_name << "\n";
                 close_connection(conn);
                 return;
             }
 
             if (event.type == CommandType::REQUEST_NEXT_PENDING_EVENT) {
                 // Client requested a pending event
-                if (auto event = get_and_set_in_progress_next_event(client_name)) {
+                if (auto event = get_and_set_in_progress_next_event(client_name)) {               
                     // sned the event to the client
                     if (handle_send_event(conn, tracked_files_directory, &event.value()) < 0) {
-                        std::cerr << "Failed to send pending event to client: " << client_name << "\n";
+                        std::cerr << "[server.cpp:main] Failed to send pending event to client: " << client_name << "\n";
                         close_connection(conn);
                         reset_in_progress_event(event->id); // re-add the event to the database to retry later
                         return;
@@ -200,25 +202,27 @@ void end_of_connection(Connection* conn, Event& event) {
     // send number of events that the client need to process
     uint64_t num_events = get_pending_event_count(event.client_id);
     uint64_t num_events_net = htonl(num_events);
-    std::cout << "Number of pending events for client '" << event.client_id << "': " << num_events << "\n";
+    std::cout << "[server.cpp:end_of_connection] Number of pending events for client '" << event.client_id << "': " << num_events << "\n";
     if (safe_SSL_write(conn, &num_events_net, sizeof(num_events_net)) < 0) {
-        std::cerr << "Failed to send number of pending events to client: " << event.client_id << "\n";
+        std::cerr << "[server.cpp:end_of_connection] Failed to send number of pending events to client: " << event.client_id << "\n";
     }
 
-    std::cout << "Closing connection with client: " << event.client_id << "\n";
+    std::cout << "[server.cpp:end_of_connection] Closing connection with client: " << event.client_id << "\n";
     close_connection(conn);
 
     // create events for all other clients to process the changes from this client
-    std::cout << "Creating events for other clients to process changes from client '" << event.client_id << "for event: " << event.type << ":" << event.path << "'\n";
+    std::cout << "[server.cpp:end_of_connection] Creating events for other clients to process changes from client '" << event.client_id << "for event: " << event.type << ":" << event.path << "'\n";
     auto origional_client_id = event.client_id;
     for (std::string user : get_users()) {
-        std::cout << "Checking if event for user '" << user << "' needs to be created\n";
+        std::cout << "[server.cpp:end_of_connection] Checking if event for user '" << user << "' needs to be created\n";
         if (user != origional_client_id) {
-            std::cout << "Creating event for user '" << user << "' to process changes from client '" << origional_client_id << "'\n";
+            std::cout << "[server.cpp:end_of_connection] Creating event for user '" << user << "' to process changes from client '" << origional_client_id << "'\n";
             event.client_id = user;
             create_event(event);
         }
     }
+
+    std::cout << "[server.cpp:end_of_connection] Finished everything for client '" << origional_client_id << "'\n";
 }
 
 void close_connection(Connection* conn) {
@@ -233,7 +237,7 @@ void shutdown_ssl(SSL* ssl) {
     do {
         shutdown_result = SSL_shutdown(ssl);
         if (shutdown_result != 1 && shutdown_result != 0) {
-            std::cerr << "SSL shutdown failed\n";
+            std::cerr << "[server.cpp:shutdown_ssl] SSL shutdown failed\n";
         }
     } while (shutdown_result == 0);
 }
