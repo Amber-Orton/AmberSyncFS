@@ -35,9 +35,10 @@ uint64_t ntohll(uint64_t value) {
 
 uint64_t get_file_modification_time(const std::string& file_path) {
     std::filesystem::path full_file_path(file_path);
+    full_file_path = full_file_path.lexically_normal(); // Normalize the file path to ensure consistent behavior
     // check existance
     if (!std::filesystem::exists(full_file_path)) {
-        return get_delete_mtime(file_path); //if doesnt exist check db
+        return get_delete_mtime(full_file_path); //if doesnt exist check db
     }
     auto ftime = std::filesystem::last_write_time(full_file_path);
     auto standard_time = std::chrono::time_point_cast<std::chrono::system_clock::duration>(
@@ -48,17 +49,19 @@ uint64_t get_file_modification_time(const std::string& file_path) {
 }
 
 int set_file_modification_time(const std::string& file_path, uint64_t mod_time) {
-    if (std::filesystem::exists(file_path)) {
+    std::filesystem::path full_file_path(file_path);
+    full_file_path = full_file_path.lexically_normal(); // Normalize the file path to ensure consistent behavior
+    if (std::filesystem::exists(full_file_path)) {
         struct utimbuf new_times;
         new_times.actime = mod_time; // access time
         new_times.modtime = mod_time; // modification time
-        if (utime(file_path.c_str(), &new_times) != 0) {
-            std::cerr << "Failed to set file modification time for " << file_path << ": " << strerror(errno) << "\n";
+        if (utime(full_file_path.c_str(), &new_times) != 0) {
+            std::cerr << "Failed to set file modification time for " << full_file_path << ": " << strerror(errno) << "\n";
             return -1;
         }
         return 0;
     } else {
-        set_delete_mtime(file_path, mod_time); // if doesnt exist set it as deleted
+        set_delete_mtime(full_file_path, mod_time); // if doesnt exist set it as deleted
         return 0;
     }
 }

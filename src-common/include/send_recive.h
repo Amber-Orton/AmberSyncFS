@@ -40,23 +40,38 @@ int send_delete_directory_tls(std::string relative_start_directory, std::string 
 // Returns 0 on success, -1 on failure, and 1 if the file was not updated because the incoming file was not newer than the existing file (but still read and discarded the incoming data to clear the SSL buffer)
 int receive_file_tls(std::string relative_start_directory, Connection* conn, Event* out_event = nullptr);
 
-// Returns 0 on success, -1 on failure, and 1 if the file was not deleted because the incoming delete command was not newer than the existing file (but still read and discarded the incoming data to clear the SSL buffer)
-int receive_delete_file_tls(std::string relative_start_directory, Connection* conn, Event* out_event = nullptr);
-
 // Returns 0 on success, -1 on failure, and 1 if the directory was not updated because the incoming directory was not newer than the existing directory (but still read and discarded the incoming data to clear the SSL buffer)
 int receive_directory_tls(std::string relative_start_directory, Connection* conn, Event* out_event = nullptr);
 
-// Returns 0 on success, -1 on failure, and 1 if the directory was not deleted because the incoming delete command was not newer than the existing directory (but still read and discarded the incoming data to clear the SSL buffer)
-int receive_delete_directory_tls(std::string relative_start_directory, Connection* conn, Event* out_event = nullptr);
+// Returns 0 on success, -1 on failure, and 1 if the path was not deleted because the incoming delete command was not newer than the existing path (but still read and discarded the incoming data to clear the SSL buffer)
+int receive_delete_path_tls(std::string relative_start_directory, Connection* conn, Event* out_event = nullptr);
+
+// Returns 0 on success, -1 on failure
+int send_request_number_pending_events_tls(Connection* conn);
+
+// Returns 0 on success, -1 on failure, and 1 if the path was not updated because the incoming update command was not newer than the existing path (but still read and discarded the incoming data to clear the SSL buffer)
+int send_handle_request_update_for_path(Connection* conn, std::string relative_start_directory, std::string relative_path);
 
 // Returns 0 on success, -1 on failure. Used to request handling of pending events from the server.
-int send_request_handle_pending_event_tls(Connection* conn, std::string relative_start_directory);
+int send_handle_request_pending_event_tls(Connection* conn, std::string relative_start_directory);
 
-// Returns 0 on success, -1 on failure. Handles an incoming event from the client.
+// Returns 0 on success, -1 on failure. Used to request handling of pending events from the server.
+int receive_handle_request_update_for_path(std::string relative_start_directory, Connection* conn);
+
+// Returns 0 on success, -1 on failure. used to request the next pending event from the server
+int receive_handle_request_pending_event_tls(std::string relative_start_directory, Connection* conn, Event* out_event = nullptr);
+
+// Returns 0 on success, -1 on failure. Used to request handle a request for the directory structure
+int receive_handle_request_directory_structure(std::string relative_start_directory, Connection* conn);
+
+// Returns 0 on success, -1 on failure. out_response is a pointer to a string that will be filled with the directory structure data
+int send_request_directory_structure(Connection* conn, void* out_response);
+
+// Returns 0 on success, -1 on failure, 1 if event is NOTHING. Handles an incoming event from the client.
 int handle_incoming_event(Connection* conn, std::string relative_start_directory, Event* out_event = nullptr);
 
 // Returns 0 on success, -1 on failure, -2 for unknown event type, -3 for invalid path. Handles sending an event to the server.
-int handle_send_event(Connection* conn, std::string relative_start_directory, Event* event);
+int handle_send_event(Connection* conn, std::string relative_start_directory, Event* event, void* out_response = nullptr);
 
 
 #endif

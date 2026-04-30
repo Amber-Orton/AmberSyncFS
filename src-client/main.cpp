@@ -12,6 +12,9 @@
 #include <iostream>
 #include "database.h"
 #include <condition_variable>
+#include "connection.h"
+#include "file_system_evaluator.h"
+#include <command.h>
 
 
 
@@ -41,10 +44,10 @@ int main(int argc, char *argv[]) {
 	device_name = argv[1];
 	server_ip = argv[2];
 	server_port = std::stoi(argv[3]);
-	unsigned int num_threads = std::stoi(argv[4]);
+	num_threads = std::stoi(argv[4]);
 	track_root = argv[5];
 	data_dir = argv[6];
-
+	
 	// Ensure data directories exist
 	ensure_dir(data_dir);
 
@@ -55,17 +58,87 @@ int main(int argc, char *argv[]) {
 	}
 	reset_in_progress_events(); // reset any events that were in progress (e.g. if the client crashed while processing them)
 
+	num_threads = std::max(1u, num_threads); // Ensure at least one thread for handling events
 	
-	// Initialize the event semaphore with the number of hardware threads (or 4 if unknown)
-	unsigned int max_num_threads = std::thread::hardware_concurrency();
-	if (max_num_threads > 0) {
-		num_threads = std::min(num_threads, max_num_threads);
-	} else {
-		num_threads = std::max(num_threads, 1u);
+	// Start the tracker thread to monitor file system changes and create events
+	std::thread tracker_thread(start_tracking);
+
+
+	// get pending events count from server
+	auto sucess = false;
+	while (!sucess) {
+		auto conn = try_establish_connection(server_ip, server_port);
+		if (start_of_connection(conn) < 0) {
+			std::cerr << "Failed to initialize server connection for startup routine\n";
+			close_connection(conn);
+			continue;
+		}
+		if (send_request_number_pending_events_tls(conn) < 0) {
+			std::cerr << "Failed to send request for number of pending events\n";
+			close_connection(conn);
+			continue;
+		}
+		if (end_of_connection(conn) < 0) {
+			std::cerr << "Failed to end connection\n";
+			close_connection(conn);
+			continue;
+		}
+		// all successfull
+		sucess = true;
 	}
 
-	
-	std::thread tracker_thread(start_tracking);
+	// check whole filesystem to see if there are any discrepencies between the client and server and create events for them keep trying until sucessfull
+	sucess = false;
+	std::vector<Event> events;
+	while (!sucess) {
+		auto conn = try_establish_connection(server_ip, server_port);
+		if (start_of_connection(conn) < 0) {
+			std::cerr << "Failed to initialize server connection for startup routine directory structure check\n";
+			close_connection(conn);
+			continue;
+		}
+		std::string server_snapshot;
+		if (send_request_directory_structure(conn, &server_snapshot) < 0) {
+			std::cerr << "Failed to send request for directory structure\n";
+			close_connection(conn);
+			continue;
+		}
+		if (end_of_connection(conn) < 0) {
+			std::cerr << "Failed to end server connection\n";
+			close_connection(conn);
+			continue;
+		}
+		events = parse_snapshot(server_snapshot, track_root);
+		
+		// all successfull
+		sucess = true;
+	}
+
+	// process the events
+	std::cout << "Checked directory structure with server, found " << events.size() << " events to process\n";
+	while (!events.empty()) {
+		handle_all_pending_events(); // handle any pending events that may have been created from handling the directory structure events to ensure most up-to-date state
+		auto event = events.back(); // get the last event to handle it, we will remove it from the list after handling it
+		std::cout << "handling:  Type: " << static_cast<int>(event.type) << ", Path: " << event.path << "\n";
+		auto conn = try_establish_connection(server_ip, server_port);
+		if (start_of_connection(conn) < 0) {
+			std::cerr << "Failed to initialize server connection for startup routine directory structure check event handling\n";
+			close_connection(conn);
+			continue;
+		}
+		if (handle_send_event(conn, track_root, &event) < 0) {
+			std::cerr << "Failed to handle event from directory structure check with server\n";
+			close_connection(conn);
+			continue;
+		}
+		if (end_of_connection(conn) < 0) {
+			std::cerr << "Failed to end server connection for startup routine directory structure check event handling\n";
+			close_connection(conn);
+			continue;
+		}
+		events.pop_back(); // remove the event we just handled and move on to the next one
+	}
+
 	//create and run handler_threads
 	auto handler_threads = std::vector<std::thread>{};
 	for (unsigned int i = 0; i < num_threads; ++i) {

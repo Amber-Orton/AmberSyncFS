@@ -180,10 +180,18 @@ int main(int argc, char *argv[]) {
                 // Client requested a pending event
                 if (auto event = get_and_set_in_progress_next_event(client_name)) {               
                     // sned the event to the client
-                    if (handle_send_event(conn, tracked_files_directory, &event.value()) < 0) {
-                        std::cerr << "[server.cpp:main] Failed to send pending event to client: " << client_name << "\n";
+                    if (event.has_value()) {
+                        if (handle_send_event(conn, tracked_files_directory, &event.value()) < 0) {
+                            std::cerr << "[server.cpp:main] Failed to send pending event to client: " << client_name << "\n";
+                            close_connection(conn);
+                            reset_in_progress_event(event->id); // re-add the event to the database to retry later
+                            return;
+                        }
+                    } else {
+                        std::cerr << "[server.cpp:main] No pending event found for client: " << client_name << "\n";
+                        event->type = CommandType::UNKNOWN; // set to unknown command to indicate no event found, client will handle this by just closing the connection
+                        handle_send_event(conn, tracked_files_directory, &event.value()); // send the unknown command response to the client
                         close_connection(conn);
-                        reset_in_progress_event(event->id); // re-add the event to the database to retry later
                         return;
                     }
                 }
@@ -212,7 +220,19 @@ void end_of_connection(Connection* conn, Event& event) {
 
     // create events for all other clients to process the changes from this client
     auto origional_client_id = event.client_id;
-    if (event.type != CommandType::UNKNOWN && event.type != CommandType::REQUEST_NEXT_PENDING_EVENT && event.type != CommandType::REQUEST_NUMBER_PENDING_EVENTS) { 
+    switch (event.type) {
+    case CommandType::UNKNOWN:
+    case CommandType::REQUEST_NEXT_PENDING_EVENT:
+    case CommandType::REQUEST_NUMBER_PENDING_EVENTS:
+    case CommandType::REQUEST_DIRECTORY_STRUCTURE:
+    case CommandType::NOTHING:
+        // Do not create events for other clients
+        std::cout << "[server.cpp:end_of_connection] No events to create for other clients for event: " << event.type << ":" << event.path << "\n";
+        break;
+    case CommandType::UPLOAD_FILE:
+    case CommandType::UPLOAD_DIRECTORY:
+    case CommandType::DELETE_PATH:
+        // Create events for other clients
         std::cout << "[server.cpp:end_of_connection] Creating events for other clients to process changes from client '" << event.client_id << "for event: " << event.type << ":" << event.path << "'\n";
         for (std::string user : get_users()) {
             std::cout << "[server.cpp:end_of_connection] Checking if event for user '" << user << "' needs to be created\n";
@@ -222,8 +242,7 @@ void end_of_connection(Connection* conn, Event& event) {
                 create_event(event);
             }
         }
-    } else {
-        std::cout << "[server.cpp:end_of_connection] No events to create for other clients for event: " << event.type << ":" << event.path << "\n";
+        break;
     }
 
     std::cout << "[server.cpp:end_of_connection] Finished everything for client '" << origional_client_id << "'\n";

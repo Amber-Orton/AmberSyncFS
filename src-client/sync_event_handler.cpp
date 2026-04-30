@@ -61,7 +61,7 @@ void handle_events() {
                     events_cv.notify_one();
                     continue;
                 }
-                if (send_request_handle_pending_event_tls(conn, track_root) < 0) {
+                if (send_handle_request_pending_event_tls(conn, track_root) < 0) {
                     std::cerr << "Failed to send/handle pending event request\n";
                     close_connection(conn);
                     pending_events.fetch_add(1);
@@ -72,6 +72,14 @@ void handle_events() {
 
             if (end_of_connection(conn) < 0) {
                 std::cerr << "Failed to finalize server connection\n";
+                if (event) {
+                    reset_in_progress_event(event->id); // re-add the event to the database to retry later
+                } else {
+                    pending_events.fetch_add(1); // re-add the pending event count to retry later
+                }
+                close_connection(conn);
+                events_cv.notify_one();
+                continue;
             }
         } else {
             // Use a dummy mutex and defer_lock to avoid creating a new mutex every time
@@ -79,5 +87,30 @@ void handle_events() {
             events_cv.wait_for(wait_lock, std::chrono::seconds(1));
             std::cout << "woke up" << std::endl;
         }
+    }
+}
+
+void handle_all_pending_events() {
+    while (pending_events.fetch_sub(1) > 0) {
+        auto conn = try_establish_connection(server_ip, server_port);
+        if (start_of_connection(conn) < 0) {
+            std::cerr << "Failed to initialize server connection for startup routine pending events\n";
+            close_connection(conn);
+            pending_events.fetch_add(1); // re-add the pending event count to retry later
+            continue;
+        }
+        if (send_handle_request_pending_event_tls(conn, track_root) < 0) {
+            std::cerr << "Failed to send/handle pending event request for startup routine\n";
+            close_connection(conn);
+            pending_events.fetch_add(1); // re-add the pending event count to retry later
+            continue;
+        }
+        if (end_of_connection(conn) < 0) {
+            std::cerr << "Failed to finalize server connection for startup routine pending events\n";
+            close_connection(conn);
+            pending_events.fetch_add(1); // re-add the pending event count to retry later
+            continue;
+        }
+        std::cout << "Handled a pending event from server, remaining pending events: " << pending_events.load() << "\n";
     }
 }

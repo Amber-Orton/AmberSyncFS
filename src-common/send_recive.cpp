@@ -22,6 +22,7 @@
 #include "database.h"
 #include "file_lock.h"
 #include "command.h"
+#include "file_system_evaluator.h"
 
 
 // functions to handle sending and reciving events
@@ -50,9 +51,9 @@ int send_file_tls(std::string relative_start_directory, std::string relative_fil
     std::ifstream file(full_path, std::ios::binary);
     if (!file) {
         std::cerr << "[send_recive.cpp:send_file_tls] Failed to open file, just requesting number of pending events\n";
-        CommandType command = CommandType::REQUEST_NUMBER_PENDING_EVENTS; // Send a command to indicate failure but still close connection gracefully
-        if (safe_SSL_write(conn, &command, sizeof(command)) < 0) { // Send a command to indicate failure but still close connection gracefully
-            std::cerr << "[send_recive.cpp:send_file_tls] Failed to send request number of pending events command\n";
+        CommandType command = CommandType::NOTHING; // Send a command to indicate failure
+        if (safe_SSL_write(conn, &command, sizeof(command)) < 0) {
+            std::cerr << "[send_recive.cpp:send_file_tls] Failed to send unknown command\n";
             return -1;
         }
         return 1; // return 1 to indicate failure but do not retry as this is likely an issue with the file itself and not the connection
@@ -108,38 +109,6 @@ int send_file_tls(std::string relative_start_directory, std::string relative_fil
     return 0;
 }
 
-int send_delete_file_tls(std::string relative_start_directory, std::string relative_file_path, uint64_t mod_time, Connection* conn) {
-    std::filesystem::path full_path(relative_start_directory);
-    full_path.append(relative_file_path);
-    FileLockGuard guard(full_path.lexically_normal().string()); // Lock normalized file path
-
-    CommandType command = CommandType::DELETE_FILE;
-    if (safe_SSL_write(conn, &command, sizeof(command)) < 0) {
-        std::cerr << "[send_recive.cpp:send_delete_file_tls] Failed to send delete command\n";
-        return -1;
-    }
-
-    // Send file name length and name
-    std::string filename = relative_file_path; // Send relative path for server dir structure
-    uint64_t name_len = htonl(filename.size());
-    if (safe_SSL_write(conn, &name_len, sizeof(name_len)) < 0) {
-        std::cerr << "[send_recive.cpp:send_delete_file_tls] Failed to send file name length\n";
-        return -1;
-    }
-    if (safe_SSL_write(conn, filename.c_str(), filename.size()) < 0) {
-        std::cerr << "[send_recive.cpp:send_delete_file_tls] Failed to send file name\n";
-        return -1;
-    }
-
-    uint64_t mod_time_net = htonll(mod_time);
-    if (safe_SSL_write(conn, &mod_time_net, sizeof(mod_time_net)) < 0) {
-        std::cerr << "[send_recive.cpp:send_delete_file_tls] Failed to send file modification time\n";
-        return -1;
-    }
-
-    return 0;
-}
-
 int send_directory_tls(std::string relative_start_directory, std::string relative_directory_path, Connection* conn) {
     std::filesystem::path full_path(relative_start_directory);
     full_path.append(relative_directory_path);
@@ -174,14 +143,14 @@ int send_directory_tls(std::string relative_start_directory, std::string relativ
     return 0;
 }
 
-int send_delete_directory_tls(std::string relative_start_directory, std::string relative_directory_path, uint64_t mod_time, Connection* conn) {
+int send_delete_path_tls(std::string relative_start_directory, std::string relative_directory_path, uint64_t mod_time, Connection* conn) {
     std::filesystem::path full_path(relative_start_directory);
     full_path.append(relative_directory_path);
     FileLockGuard guard(full_path.lexically_normal().string()); // Lock normalized directory path
 
-    CommandType command = CommandType::DELETE_DIRECTORY;
-    if (safe_SSL_write(conn, &command, sizeof(command)) < 0) { // Simple command to indicate delete directory
-        std::cerr << "[send_recive.cpp:send_delete_directory_tls] Failed to send delete directory command\n";
+    CommandType command = CommandType::DELETE_PATH;
+    if (safe_SSL_write(conn, &command, sizeof(command)) < 0) { // Simple command to indicate delete path
+        std::cerr << "[send_recive.cpp:send_delete_path_tls] Failed to send delete path command\n";
         return -1;
     }
 
@@ -189,17 +158,17 @@ int send_delete_directory_tls(std::string relative_start_directory, std::string 
     std::string dirname = relative_directory_path; // Send relative path for server dir structure
     uint64_t name_len = htonl(dirname.size());
     if (safe_SSL_write(conn, &name_len, sizeof(name_len)) < 0) {
-        std::cerr << "[send_recive.cpp:send_delete_directory_tls] Failed to send directory name length\n";
+        std::cerr << "[send_recive.cpp:send_delete_path_tls] Failed to send delete path name length\n";
         return -1;
     }
     if (safe_SSL_write(conn, dirname.c_str(), dirname.size()) < 0) {
-        std::cerr << "[send_recive.cpp:send_delete_directory_tls] Failed to send directory name\n";
+        std::cerr << "[send_recive.cpp:send_delete_path_tls] Failed to send delete path name\n";
         return -1;
     }
 
     uint64_t mod_time_net = htonll(mod_time);
     if (safe_SSL_write(conn, &mod_time_net, sizeof(mod_time_net)) < 0) {
-        std::cerr << "[send_recive.cpp:send_delete_directory_tls] Failed to send directory modification time\n";
+        std::cerr << "[send_recive.cpp:send_delete_path_tls] Failed to send delete path modification time\n";
         return -1;
     }
 
@@ -345,75 +314,6 @@ int receive_file_tls(std::string relative_start_directory, Connection* conn, Eve
     return 0;
 }
 
-int receive_delete_file_tls(std::string relative_start_directory, Connection* conn, Event* out_event) {
-    uint64_t name_len = 0;
-    int n1 = safe_SSL_read(conn, &name_len, sizeof(name_len));
-    if (n1 <= 0) {
-        std::cerr << "[send_recive.cpp:receive_delete_file_tls] Failed to read file name length for deletion\n" << std::flush;
-        return -1;
-    }
-    std::cout << "[send_recive.cpp:receive_delete_file_tls] Read file name length for deletion: " << n1 << " bytes\n" << std::flush;
-    name_len = ntohl(name_len);
-    if (name_len == 0 || name_len > 256) {
-        std::cerr << "[send_recive.cpp:receive_delete_file_tls] Invalid filename length for deletion: " << name_len << "\n" << std::flush;
-        return -1;
-    }
-
-    std::string filename(name_len, '\0');
-    int n2 = safe_SSL_read(conn, filename.data(), name_len);
-    if (n2 <= 0) {
-        std::cerr << "[send_recive.cpp:receive_delete_file_tls] Failed to read file name for deletion\n" << std::flush;
-        return -1;
-    }
-    std::cout << "[send_recive.cpp:receive_delete_file_tls] Read file name for deletion: '" << filename << "' (" << n2 << " bytes)\n" << std::flush;
-
-    std::filesystem::path file_path(relative_start_directory);
-    file_path.append(filename);
-    FileLockGuard guard(file_path.lexically_normal().string()); // Lock normalized file path
-
-
-    // update out_event
-    if (out_event) {
-        out_event->path = filename;
-    }
-
-    // compare modification time
-    uint64_t mod_time_net = 0;
-    if (safe_SSL_read(conn, &mod_time_net, sizeof(mod_time_net)) < 0) {
-        std::cerr << "[send_recive.cpp:receive_delete_file_tls] Failed to read file modification time for deletion\n" << std::flush;
-        return -1;
-    }
-    uint64_t mod_time = ntohll(mod_time_net);
-
-    // update out_event
-    if (out_event) {
-        out_event->timestamp = mod_time;
-    }
-
-    auto current_mod_time = get_file_modification_time(file_path.string());
-    if (mod_time <= current_mod_time) {
-        std::cerr << "[send_recive.cpp:receive_delete_file_tls] Received delete command is not newer than existing file. Skipping deletion for '" << filename << "'\n" << std::flush;
-        return 1; // Not an error, just no deletion needed
-    }
-
-    std::error_code ec;
-    bool removed = std::filesystem::remove(file_path, ec);
-    if (ec) {
-        std::cerr << "[send_recive.cpp:receive_delete_file_tls] Failed to delete file: " << ec.message() << "\n" << std::flush;
-        return -1;
-    }
-
-    if (removed) {
-        std::cout << "[send_recive.cpp:receive_delete_file_tls] Deleted file: '" << file_path.string() << "'\n" << std::flush;
-    } else {
-        std::cout << "[send_recive.cpp:receive_delete_file_tls] Delete target already absent, recording delete time: '" << file_path.string() << "'\n" << std::flush;
-    }
-
-    // Record deletion time so stale uploads can be rejected later.
-    set_delete_mtime(file_path.string(), mod_time);
-    return 0;
-}
-
 int receive_directory_tls(std::string relative_start_directory, Connection* conn, Event* out_event) {
     uint64_t name_len = 0;
     int n1 = safe_SSL_read(conn, &name_len, sizeof(name_len));
@@ -479,30 +379,30 @@ int receive_directory_tls(std::string relative_start_directory, Connection* conn
     return 0;
 }
 
-int receive_delete_directory_tls(std::string relative_start_directory, Connection* conn, Event* out_event) {
+int receive_delete_path_tls(std::string relative_start_directory, Connection* conn, Event* out_event) {
     uint64_t name_len = 0;
     int n1 = safe_SSL_read(conn, &name_len, sizeof(name_len));
     if (n1 <= 0) {
-        std::cerr << "[send_recive.cpp:receive_delete_directory_tls] Failed to read directory name length\n" << std::flush;
+        std::cerr << "[send_recive.cpp:receive_delete_path_tls] Failed to read path name length\n" << std::flush;
         return -1;
     }
-    std::cout << "[send_recive.cpp:receive_delete_directory_tls] Read directory name length: " << n1 << " bytes\n" << std::flush;
+    std::cout << "[send_recive.cpp:receive_delete_path_tls] Read path name length: " << n1 << " bytes\n" << std::flush;
     name_len = ntohl(name_len);
     if (name_len == 0 || name_len > 256) {
-        std::cerr << "[send_recive.cpp:receive_delete_directory_tls] Invalid directory name length: " << name_len << "\n" << std::flush;
+        std::cerr << "[send_recive.cpp:receive_delete_path_tls] Invalid path name length: " << name_len << "\n" << std::flush;
         return -1;
     }
 
     std::string dirname(name_len, '\0');
     int n2 = safe_SSL_read(conn, dirname.data(), name_len);
     if (n2 <= 0) {
-        std::cerr << "[send_recive.cpp:receive_delete_directory_tls] Failed to read directory name\n" << std::flush;
+        std::cerr << "[send_recive.cpp:receive_delete_path_tls] Failed to read path name\n" << std::flush;
         return -1;
     }
-    std::cout << "[send_recive.cpp:receive_delete_directory_tls] Read directory name: '" << dirname << "' (" << n2 << " bytes)\n" << std::flush;
+    std::cout << "[send_recive.cpp:receive_delete_path_tls] Read path name: '" << dirname << "' (" << n2 << " bytes)\n" << std::flush;
 
-    // construct full directory path
-    // Lock the directory path to prevent concurrent modifications
+    // construct full path
+    // Lock the path to prevent concurrent modifications
     std::filesystem::path dir_path(relative_start_directory);
     dir_path.append(dirname);
     FileLockGuard guard(dir_path.lexically_normal().string()); // Lock normalized directory path
@@ -513,10 +413,10 @@ int receive_delete_directory_tls(std::string relative_start_directory, Connectio
         out_event->path = dirname;
     }
 
-    // read and check directory modification time
+    // read and check path modification time
     uint64_t mod_time_net = 0;
     if (safe_SSL_read(conn, &mod_time_net, sizeof(mod_time_net)) < 0) {
-        std::cerr << "[send_recive.cpp:receive_delete_directory_tls] Failed to read directory modification time\n" << std::flush;
+        std::cerr << "[send_recive.cpp:receive_delete_path_tls] Failed to read path modification time\n" << std::flush;
         return -1;
     }
     uint64_t mod_time = ntohll(mod_time_net);
@@ -529,21 +429,21 @@ int receive_delete_directory_tls(std::string relative_start_directory, Connectio
 
     auto current_mod_time = get_file_modification_time(dir_path);
     if (mod_time <= current_mod_time) {
-        std::cerr << "[send_recive.cpp:receive_delete_directory_tls] Received delete command is not newer than existing directory. Skipping deletion for '" << dirname << "'\n" << std::flush;
+        std::cerr << "[send_recive.cpp:receive_delete_path_tls] Received delete command is not newer than existing path. Skipping deletion for '" << dirname << "'\n" << std::flush;
         return 1; // Not an error, just no deletion needed
     }
 
     std::error_code ec;
     auto removed_count = std::filesystem::remove_all(dir_path, ec);
     if (ec) {
-        std::cerr << "[send_recive.cpp:receive_delete_directory_tls] Failed to delete directory: " << ec.message() << "\n" << std::flush;
+        std::cerr << "[send_recive.cpp:receive_delete_path_tls] Failed to delete path: " << ec.message() << "\n" << std::flush;
         return -1;
     }
 
     if (removed_count > 0) {
-        std::cout << "[send_recive.cpp:receive_delete_directory_tls] Deleted directory: '" << dir_path.string() << "'\n" << std::flush;
+        std::cout << "[send_recive.cpp:receive_delete_path_tls] Deleted path: '" << dir_path.string() << "'\n" << std::flush;
     } else {
-        std::cout << "[send_recive.cpp:receive_delete_directory_tls] Delete target already absent, recording delete time: '" << dir_path.string() << "'\n" << std::flush;
+        std::cout << "[send_recive.cpp:receive_delete_path_tls] Delete target already absent, recording delete time: '" << dir_path.string() << "'\n" << std::flush;
     }
 
     // Record deletion time so stale updates can be rejected later.
@@ -552,14 +452,135 @@ int receive_delete_directory_tls(std::string relative_start_directory, Connectio
     return 0;
 }
 
-int send_request_handle_pending_event_tls(Connection* conn, std::string relative_start_directory) {
+int send_request_number_pending_events_tls(Connection* conn) {
     if (!conn) return -1;
-    CommandType command = CommandType::REQUEST_NEXT_PENDING_EVENT;
+    CommandType command = CommandType::REQUEST_NUMBER_PENDING_EVENTS;
     if (safe_SSL_write(conn, &command, sizeof(command)) < 0) {
-        std::cerr << "[send_recive.cpp:send_request_handle_pending_event_tls] Failed to send request pending events command\n";
+        std::cerr << "[send_recive.cpp:send_request_number_pending_events_tls] Failed to send request number of pending events command\n";
+        return -1;
+    }
+    return 0;
+}
+
+int send_handle_request_update_for_path(Connection* conn, std::string relative_start_directory, std::string relative_path) {
+    if (!conn) return -1;
+    CommandType command = CommandType::REQUEST_UPDATE_FOR_PATH;
+    if (safe_SSL_write(conn, &command, sizeof(command)) < 0) {
+        std::cerr << "[send_recive.cpp:send_handle_request_update_for_path] Failed to send request handle update for path command\n";
+        return -1;
+    }
+    uint64_t name_len = relative_path.length();
+    if (safe_SSL_write(conn, &name_len, sizeof(name_len)) < 0) {
+        std::cerr << "[send_recive.cpp:send_handle_request_update_for_path] Failed to send path name length\n" << std::flush;
+        return -1;
+    }
+    if (safe_SSL_write(conn, relative_path.c_str(), name_len) < 0) {
+        std::cerr << "[send_recive.cpp:send_handle_request_update_for_path] Failed to send path name\n" << std::flush;
         return -1;
     }
     return handle_incoming_event(conn, relative_start_directory);
+}
+
+int send_handle_request_pending_event_tls(Connection* conn, std::string relative_start_directory) {
+    if (!conn) return -1;
+    CommandType command = CommandType::REQUEST_NEXT_PENDING_EVENT;
+    if (safe_SSL_write(conn, &command, sizeof(command)) < 0) {
+        std::cerr << "[send_recive.cpp:send_handle_request_pending_event_tls] Failed to send request pending events command\n";
+        return -1;
+    }
+    return handle_incoming_event(conn, relative_start_directory);
+}
+
+int receive_handle_request_pending_event_tls(std::string relative_start_directory, Connection* conn, Event* out_event) {
+    // Client requested a pending event
+    if (auto event = get_and_set_in_progress_next_event(out_event ? out_event->client_id : "")) {               
+        // sned the event to the client
+        if (event.has_value()) {
+            if (handle_send_event(conn, relative_start_directory, &event.value()) < 0) {
+                std::cerr << "[server.cpp:main] Failed to send pending event to client: " << out_event->client_id << "\n";
+                reset_in_progress_event(event->id); // re-add the event to the database to retry later
+                return -1;
+            }
+            return 0;
+        } else {
+            std::cerr << "[server.cpp:main] No pending event found for client: " << out_event->client_id << "\n";
+            event->type = CommandType::NOTHING; // set to nothing command to indicate no event found, client will handle this by just closing the connection
+            handle_send_event(conn, relative_start_directory, &event.value()); // send the nothing command response to the client
+            return 1;
+        }
+    }
+    return -1; // return -1 if there was an error or no event was found
+}
+
+int receive_handle_request_update_for_path(std::string relative_start_directory, Connection* conn) {
+    // Client requested an update for a specific path, read the path from the client and send an update for that path
+    uint64_t name_len = 0;
+    if (safe_SSL_read(conn, &name_len, sizeof(name_len)) < 0) {
+        std::cerr << "[send_recive.cpp:receive_handle_request_update_for_path] Failed to read path name length\n" << std::flush;
+        return -1;
+    }
+    std::string relative_path(name_len, '\0');
+    if (safe_SSL_read(conn, &relative_path[0], name_len) < 0) {
+        std::cerr << "[send_recive.cpp:receive_handle_request_update_for_path] Failed to read path name\n" << std::flush;
+        return -1;
+    }
+    
+    // check if its a file or directory or doesnt exist and send the appropriate response
+    std::filesystem::path full_path(relative_start_directory);
+    full_path.append(relative_path);
+    if (std::filesystem::exists(full_path)) {
+        if (std::filesystem::is_directory(full_path)) {
+            return send_directory_tls(relative_start_directory, relative_path, conn);
+        } else if (std::filesystem::is_regular_file(full_path)) {
+            return send_file_tls(relative_start_directory, relative_path, conn);
+        } else {
+            std::cerr << "[send_recive.cpp:receive_handle_request_update_for_path] Path exists but is not a regular file or directory: " << full_path.string() << "\n";
+            return -1;
+        }
+    } else {
+        // Path doesn't exist, send a delete path command to ensure client deletes it if it exists on their end
+        return send_delete_path_tls(relative_start_directory, relative_path, get_file_modification_time(full_path), conn);
+    }
+}
+
+int receive_handle_request_directory_structure(std::string relative_start_directory, Connection* conn) {
+    std::string dir_snapshot = generate_snapshot(relative_start_directory);
+    uint64_t dir_snapshot_size = dir_snapshot.size();
+    uint64_t dir_snapshot_size_net = htonll(dir_snapshot_size);
+    if (safe_SSL_write(conn, &dir_snapshot_size_net, sizeof(dir_snapshot_size_net)) < 0) {
+        std::cerr << "[send_recive.cpp:receive_handle_request_directory_structure] Failed to send directory structure size\n";
+        return -1;
+    }
+    if (safe_SSL_write(conn, dir_snapshot.c_str(), dir_snapshot_size) < 0) {
+        std::cerr << "[send_recive.cpp:receive_handle_request_directory_structure] Failed to send directory structure data\n";
+        return -1;
+    }
+    return 0;
+}
+
+int send_request_directory_structure(Connection* conn, void* out_response) {
+    if (!out_response) {
+        return -1;
+    }
+    if (!conn) return -1;
+    CommandType command = CommandType::REQUEST_DIRECTORY_STRUCTURE;
+    if (safe_SSL_write(conn, &command, sizeof(command)) < 0) {
+        std::cerr << "[send_recive.cpp:send_request_directory_structure] Failed to send request directory structure command\n";
+        return -1;
+    }
+    uint64_t dir_struct_size;
+    if (safe_SSL_read(conn, &dir_struct_size, sizeof(dir_struct_size)) < 0) {
+        std::cerr << "[send_recive.cpp:send_request_directory_structure] Failed to read directory structure size\n";
+        return -1;
+    }
+    dir_struct_size = ntohll(dir_struct_size);
+
+    *static_cast<std::string*>(out_response) = std::string(dir_struct_size, '\0');
+    if (safe_SSL_read(conn, (*static_cast<std::string*>(out_response)).data(), dir_struct_size) < 0) {
+        std::cerr << "[send_recive.cpp:send_request_directory_structure] Failed to read directory structure data\n";
+        return -1;
+    }
+    return 0;
 }
 
 int handle_incoming_event(Connection* conn, std::string relative_start_directory, Event* out_event) {
@@ -567,7 +588,7 @@ int handle_incoming_event(Connection* conn, std::string relative_start_directory
     CommandType command; // Dynamically allocate command to avoid stack issues with large structs and to ensure it remains valid after function returns if needed
     int bytes_read = safe_SSL_read(conn, &command, sizeof(command)); // Read command type (e.g., "UP" for upload)
     if (bytes_read <= 0) {
-        std::cerr << "[send_recive.cpp:handle_incoming_event] Failed to read command from client\n";
+        std::cerr << "[send_recive.cpp:handle_incoming_event] Failed to read command\n";
         return -1;
     }
     if (out_event) {
@@ -581,39 +602,53 @@ int handle_incoming_event(Connection* conn, std::string relative_start_directory
     
     switch (command) {
         case CommandType::UPLOAD_FILE: {
-            std::cout << "[send_recive.cpp:handle_incoming_event] Received upload command from client\n";
+            std::cout << "[send_recive.cpp:handle_incoming_event] Received upload command\n";
             int result = receive_file_tls(relative_start_directory, conn, out_event);
             if (result < 0) {
                 std::cerr << "[send_recive.cpp:handle_incoming_event] Failed to receive file\n";
             }
             return result;
-        } case CommandType::DELETE_FILE: {
-            std::cout << "[send_recive.cpp:handle_incoming_event] Received delete command from client\n";
-            int result = receive_delete_file_tls(relative_start_directory, conn, out_event);
-            if (result < 0) {
-                std::cerr << "[send_recive.cpp:handle_incoming_event] Failed to delete file\n";
-            }
-            return result;
         } case CommandType::UPLOAD_DIRECTORY: {
-            std::cout << "[send_recive.cpp:handle_incoming_event] Received upload directory command from client\n";
+            std::cout << "[send_recive.cpp:handle_incoming_event] Received upload directory command\n";
             int result = receive_directory_tls(relative_start_directory, conn, out_event);
             if (result < 0) {
                 std::cerr << "[send_recive.cpp:handle_incoming_event] Failed to receive directory\n";
             }
             return result;
-        } case CommandType::DELETE_DIRECTORY: {
-            std::cout << "[send_recive.cpp:handle_incoming_event] Received delete directory command from client\n";
-            int result = receive_delete_directory_tls(relative_start_directory, conn, out_event);
+        } case CommandType::DELETE_PATH: {
+            std::cout << "[send_recive.cpp:handle_incoming_event] Received delete path command\n";
+            int result = receive_delete_path_tls(relative_start_directory, conn, out_event);
             if (result < 0) {
-                std::cerr << "[send_recive.cpp:handle_incoming_event] Failed to delete directory\n";
+                std::cerr << "[send_recive.cpp:handle_incoming_event] Failed to delete path\n";
             }
             return result;
         } case CommandType::REQUEST_NEXT_PENDING_EVENT: {
-            std::cout << "[send_recive.cpp:handle_incoming_event] Received request pending events command from client\n";
-            return 0; // No error, but no event data to return for this command
+            std::cout << "[send_recive.cpp:handle_incoming_event] Received request pending events command\n";
+            int result = receive_handle_request_pending_event_tls(relative_start_directory, conn, out_event);
+            if (result < 0) {
+                std::cerr << "[send_recive.cpp:handle_incoming_event] Failed to process request pending events command\n";
+            }
+            return result; // No error, but no event data to return for this command
         } case CommandType::REQUEST_NUMBER_PENDING_EVENTS: {
             std::cout << "[send_recive.cpp:handle_incoming_event] Received request number of pending events command from client\n";
-            return 0; // Nothing to be done just close the connetion
+            return 0; // No error, but no event data to return for this command, the server will respond to this command separately with the number of pending events
+        } case CommandType::REQUEST_UPDATE_FOR_PATH: {
+            std::cout << "[send_recive.cpp:handle_incoming_event] Received request update for path command from client\n";
+            int result = receive_handle_request_update_for_path(relative_start_directory, conn);
+            if (result < 0) {
+                std::cerr << "[send_recive.cpp:handle_incoming_event] Failed to process request update for path command\n";
+            }
+            return result;
+        } case CommandType::REQUEST_DIRECTORY_STRUCTURE: {
+            std::cout << "[send_recive.cpp:handle_incoming_event] Received request directory structure command from client\n";
+            int result = receive_handle_request_directory_structure(relative_start_directory, conn);
+            if (result < 0) {
+                std::cerr << "[send_recive.cpp:handle_incoming_event] Failed to process request directory structure command\n";
+            }
+            return result;
+        } case CommandType::NOTHING: {
+            std::cout << "[send_recive.cpp:handle_incoming_event] Received nothing command from client, no event to process\n";
+            return 1; // No error, but no event data to return for this command
         } default: {
             std::cerr << "[send_recive.cpp:handle_incoming_event] Unknown command received from client: " << command << "\n";
             return -1;
@@ -621,21 +656,25 @@ int handle_incoming_event(Connection* conn, std::string relative_start_directory
     }
 }
 
-int handle_send_event(Connection* conn, std::string relative_start_directory, Event* event) {
+int handle_send_event(Connection* conn, std::string relative_start_directory, Event* event, void* out_response) {
     // process the event
     if (event->path != "." && event->path != "..") {
         switch (event->type) {
             case CommandType::UPLOAD_FILE: {
                 printf("[send_recive.cpp:handle_send_event] Processing upload file event for path: %s\n", event->path.c_str());
-                if (send_file_tls(relative_start_directory, event->path, conn) < 0) {
+                int result = send_file_tls(relative_start_directory, event->path, conn);
+                if (result < 0) {
                     std::cerr << "[send_recive.cpp:handle_send_event] Failed to send file: " << event->path << "\n";
                     return -1;
+                } else if (result == 1) {
+                    std::cerr << "[send_recive.cpp:handle_send_event] File not sent as it doesn't exist\n";
+                    return result;
                 }
                 break;
-            } case CommandType::DELETE_FILE: {
-                printf("[send_recive.cpp:handle_send_event] Processing delete file event for path: %s\n", event->path.c_str());
-                if (send_delete_file_tls(relative_start_directory, event->path, event->timestamp, conn) < 0) {
-                    std::cerr << "[send_recive.cpp:handle_send_event] Failed to send delete file request: " << event->path << "\n";
+            } case CommandType::DELETE_PATH: {
+                printf("[send_recive.cpp:handle_send_event] Processing delete path event for path: %s\n", event->path.c_str());
+                if (send_delete_path_tls(relative_start_directory, event->path, event->timestamp, conn) < 0) {
+                    std::cerr << "[send_recive.cpp:handle_send_event] Failed to send delete path request: " << event->path << "\n";
                     return -1;
                 }
                 break;
@@ -646,13 +685,34 @@ int handle_send_event(Connection* conn, std::string relative_start_directory, Ev
                     return -1;
                 }
                 break;
-            } case CommandType::DELETE_DIRECTORY: {
-                printf("[send_recive.cpp:handle_send_event] Processing delete directory event for path: %s\n", event->path.c_str());
-                if (send_delete_directory_tls(relative_start_directory, event->path, event->timestamp, conn) < 0) {
-                    std::cerr << "[send_recive.cpp:handle_send_event] Failed to send delete directory request: " << event->path << "\n";
+            } case CommandType::REQUEST_NEXT_PENDING_EVENT: {
+                printf("[send_recive.cpp:handle_send_event] Processing request next pending event command\n");
+                if (send_handle_request_pending_event_tls(conn, relative_start_directory) < 0) {
+                    std::cerr << "[send_recive.cpp:handle_send_event] Failed to send request handle pending event command\n";
                     return -1;
                 }
-                break;
+                return 0;
+            } case CommandType::REQUEST_NUMBER_PENDING_EVENTS: {
+                printf("[send_recive.cpp:handle_send_event] Processing request number of pending events command\n");
+                if (send_request_number_pending_events_tls(conn) < 0) {
+                    std::cerr << "[send_recive.cpp:handle_send_event] Failed to send request number of pending events command\n";
+                    return -1;
+                }
+                return 0;
+            } case CommandType::REQUEST_UPDATE_FOR_PATH: {
+                printf("[send_recive.cpp:handle_send_event] Processing request update for path command for path: %s\n", event->path.c_str());
+                if (send_handle_request_update_for_path(conn, relative_start_directory, event->path) < 0) {
+                    std::cerr << "[send_recive.cpp:handle_send_event] Failed to process request update for path command for path: " << event->path << "\n";
+                    return -1;
+                }
+                return 0;
+            } case CommandType::REQUEST_DIRECTORY_STRUCTURE: {
+                printf("[send_recive.cpp:handle_send_event] Processing request directory structure command\n");
+                if (send_request_directory_structure(conn, out_response) < 0) {
+                    std::cerr << "[send_recive.cpp:handle_send_event] Failed to process request directory structure command\n";
+                    return -1;
+                }
+                return 0;
             } default: {
                 std::cerr << "[send_recive.cpp:handle_send_event] Unknown event type: " << event->type << " for path: " << event->path << "\n";
                 return -2; // return -2 to indicate unknown event type

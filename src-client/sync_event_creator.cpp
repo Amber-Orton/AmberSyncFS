@@ -25,7 +25,7 @@ void delete_file(const std::string& relative_path) {
     printf("creating delete event file: %s\n", relative_path.c_str());
     auto current_time = std::chrono::system_clock::to_time_t(std::chrono::system_clock::now());
      
-    if (create_event_checked(CommandType::DELETE_FILE, relative_path, current_time) < 0) {
+    if (create_event_checked(CommandType::DELETE_PATH, relative_path, current_time) < 0) {
         std::cerr << "Failed to create delete event file\n";
         return;
     }
@@ -45,7 +45,7 @@ void delete_directory(const std::string& relative_path) {
     printf("creating delete directory event file: %s\n", relative_path.c_str());
     auto current_time = std::chrono::system_clock::to_time_t(std::chrono::system_clock::now());
     
-    if (create_event_checked(CommandType::DELETE_DIRECTORY, relative_path, current_time) < 0) {
+    if (create_event_checked(CommandType::DELETE_PATH, relative_path, current_time) < 0) {
         std::cerr << "Failed to create delete directory event file\n";
         return;
     }

@@ -3,11 +3,13 @@
 
 enum class CommandType {
     UPLOAD_FILE,
-    DELETE_FILE,
     UPLOAD_DIRECTORY,
-    DELETE_DIRECTORY,
+    DELETE_PATH,
+    REQUEST_UPDATE_FOR_PATH,
     REQUEST_NEXT_PENDING_EVENT,
     REQUEST_NUMBER_PENDING_EVENTS,
+    REQUEST_DIRECTORY_STRUCTURE,
+    NOTHING, // used where an event needs to be sent but there is no event to send, eg request pending event but there are none or send file but the file doesn't exist
     UNKNOWN
 };
 

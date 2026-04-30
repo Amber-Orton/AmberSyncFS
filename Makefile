@@ -19,14 +19,16 @@ SERVER_SRC = \
 	src-common/send_recive_helper.cpp \
 	src-common/database.cpp \
 	src-common/file_lock.cpp \
-	src-common/command.cpp
+	src-common/command.cpp \
+	src-common/file_system_evaluator.cpp
 SERVER_OBJ = \
 	$(BUILD_DIR)/server.o \
 	$(BUILD_DIR)/send_recive_common.o \
 	$(BUILD_DIR)/send_recive_helper.o \
 	$(BUILD_DIR)/database.o \
 	$(BUILD_DIR)/file_lock.o \
-	$(BUILD_DIR)/command.o
+	$(BUILD_DIR)/command.o \
+	$(BUILD_DIR)/file_system_evaluator.o
 
 # Client
 CLIENT_TARGET = client
@@ -37,7 +39,8 @@ CLIENT_OBJ = \
 	$(BUILD_DIR)/send_recive_helper.o \
 	$(BUILD_DIR)/database.o \
 	$(BUILD_DIR)/file_lock.o \
-	$(BUILD_DIR)/command.o
+	$(BUILD_DIR)/command.o \
+	$(BUILD_DIR)/file_system_evaluator.o
 
 # Default rule
 all: server client
@@ -73,6 +76,10 @@ $(BUILD_DIR)/file_lock.o: src-common/file_lock.cpp
 	$(CXX) $(CXXFLAGS) -I$(INCLUDE_DIR) -I./src-common -c $< -o $@
 
 $(BUILD_DIR)/command.o: src-common/command.cpp
+	mkdir -p $(BUILD_DIR)
+	$(CXX) $(CXXFLAGS) -Isrc-common/include -c $< -o $@
+
+$(BUILD_DIR)/file_system_evaluator.o: src-common/file_system_evaluator.cpp
 	mkdir -p $(BUILD_DIR)
 	$(CXX) $(CXXFLAGS) -Isrc-common/include -c $< -o $@
 
