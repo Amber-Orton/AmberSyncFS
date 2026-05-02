@@ -10,6 +10,9 @@
 #include "database.h"
 #include <mutex>
 
+#define FILE_COLOR "\033[1;34m" // Blue for sync_event_handler.cpp
+#define COLOR_RESET "\033[0m"
+
 static std::mutex dummy_mutex;
 
 // hande the events created by the sync_event_creator.
@@ -59,7 +62,7 @@ void handle_events() {
                 events_cv.notify_one(); // other handler will check and sleep again if no more events
 
                 // deal with pending events only if not handling local event
-                std::cout <<"\033[1;32m" << events << " pending events remaining processing one now\033[0m\n";
+                std::cout << FILE_COLOR << events << " pending events remaining processing one now" << COLOR_RESET << "\n";
                 auto conn = try_establish_connection(server_ip, server_port);
                 if (start_of_connection(conn) < 0) {
                     std::cerr << "Failed to initialize server connection for pending events\n";
@@ -111,7 +114,7 @@ void handle_events() {
                 // Use a dummy mutex and defer_lock to avoid creating a new mutex every time
                 std::unique_lock<std::mutex> wait_lock(dummy_mutex, std::defer_lock);
                 events_cv.wait_for(wait_lock, std::chrono::seconds(30));
-                std::cout <<"\033[1;32m" << "woke up" << "\033[0m\n";
+                std::cout << FILE_COLOR << "woke up" << COLOR_RESET << "\n";
             }
         }
     }
@@ -138,6 +141,6 @@ void handle_all_pending_events() {
             pending_events.fetch_add(1); // re-add the pending event count to retry later
             continue;
         }
-        std::cout <<"\033[1;32m" << "Handled a pending event from server, remaining pending events: " << pending_events.load() << "\033[0m\n";
+        std::cout << FILE_COLOR << "Handled a pending event from server, remaining pending events: " << pending_events.load() << COLOR_RESET << "\n";
     }
 }

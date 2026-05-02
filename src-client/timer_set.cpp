@@ -5,6 +5,9 @@
 #include <thread>
 #include "database.h"
 
+#define FILE_COLOR "\033[1;35m" // Magenta for timer_set.cpp
+#define COLOR_RESET "\033[0m"
+
 timer_set timer_set_instance = timer_set();
 
 std::atomic<bool> timer_set::cleanup_thread_running{false};
@@ -44,7 +47,7 @@ void timer_set::cleanup() {
             bool should_create_event = item->second.access_count >= 1;
             event_type_and_path event_key = item->first;
             auto mod_time = item->second.mod_time;
-            std::cout << "[timer_set::cleanup] Expiring key: '" << event_key.event_type << "' (" << event_key.relative_path << "), access_count=" << item->second.access_count << ", elapsed=" << elapsed.count() << "s\n";
+            std::cout << FILE_COLOR << "[timer_set::cleanup] Expiring key: '" << event_key.event_type << "' (" << event_key.relative_path << "), access_count=" << item->second.access_count << ", elapsed=" << elapsed.count() << "s" << COLOR_RESET << "\n";
             item = myset.erase(item);
 
             if (should_create_event) {
@@ -53,10 +56,10 @@ void timer_set::cleanup() {
                     std::cerr << "Invalid event key format: " << event_key.event_type << "\n";
                     continue;
                 }
-                std::cout << "[timer_set::cleanup] Creating event for expired key: type='" << event_key.event_type << "', path='" << event_key.relative_path << "'\n";
+                std::cout << FILE_COLOR << "[timer_set::cleanup] Creating event for expired key: type='" << event_key.event_type << "', path='" << event_key.relative_path << "'" << COLOR_RESET << "\n";
                 create_event(event_key.event_type, event_key.relative_path, mod_time);
             } else {
-                std::cout << "[timer_set::cleanup] Not creating event for expired key: '" << event_key.event_type << "' (" << event_key.relative_path << ") (access_count < 1)\n";
+                std::cout << FILE_COLOR << "[timer_set::cleanup] Not creating event for expired key: '" << event_key.event_type << "' (" << event_key.relative_path << ") (access_count < 1)" << COLOR_RESET << "\n";
             }
         } else {
             ++item;

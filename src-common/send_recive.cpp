@@ -23,6 +23,8 @@
 #include "file_lock.h"
 #include "command.h"
 #include "file_system_evaluator.h"
+#define FILE_COLOR "\033[1;36m" // Cyan for send_recive.cpp
+#define COLOR_RESET "\033[0m"
 #include "../src-client/include/main.h"
 
 
@@ -184,7 +186,7 @@ int receive_file_tls(std::string relative_start_directory, Connection* conn, Eve
         std::cerr << "[send_recive.cpp:receive_file_tls] Failed to read file name length\n" << std::flush;
         return -1;
     }
-    std::cout << "[send_recive.cpp:receive_file_tls] Read file name length: " << n1 << " bytes\n" << std::flush;
+    std::cout << FILE_COLOR << "[send_recive.cpp:receive_file_tls] Read file name length: " << n1 << " bytes" << COLOR_RESET << "\n" << std::flush;
     name_len = ntohl(name_len);
     if (name_len == 0 || name_len > 256) {
         std::cerr << "[send_recive.cpp:receive_file_tls] Invalid filename length: " << name_len << "\n" << std::flush;
@@ -197,7 +199,7 @@ int receive_file_tls(std::string relative_start_directory, Connection* conn, Eve
         std::cerr << "[send_recive.cpp:receive_file_tls] Failed to read file name\n" << std::flush;
         return -1;
     }
-    std::cout << "[send_recive.cpp:receive_file_tls] Read file name: '" << filename << "' (" << n2 << " bytes)\n" << std::flush;
+    std::cout << FILE_COLOR << "[send_recive.cpp:receive_file_tls] Read file name: '" << filename << "' (" << n2 << " bytes)" << COLOR_RESET << "\n" << std::flush;
 
     std::filesystem::path output_path(relative_start_directory);
     output_path.append(filename);
@@ -269,7 +271,7 @@ int receive_file_tls(std::string relative_start_directory, Connection* conn, Eve
     }
 
     // Read file data
-    std::cout << "[send_recive.cpp:receive_file_tls] Receiving file: '" << filename << "'..." << std::endl << std::flush;
+    std::cout << FILE_COLOR << "[send_recive.cpp:receive_file_tls] Receiving file: '" << filename << "'..." << COLOR_RESET << std::endl << std::flush;
     char buffer[4096]; // Use smaller buffer if file is smaller than 4KB
     int bytes;
     size_t total_bytes = 0;
@@ -292,7 +294,7 @@ int receive_file_tls(std::string relative_start_directory, Connection* conn, Eve
         }
         bits_to_read = (bits_left < sizeof(buffer)) ? bits_left : sizeof(buffer);
     }
-    std::cout << "[send_recive.cpp:receive_file_tls] Received file: '" << filename << "' (" << total_bytes << " bytes)" << std::endl << std::flush;
+    std::cout << FILE_COLOR << "[send_recive.cpp:receive_file_tls] Received file: '" << filename << "' (" << total_bytes << " bytes)" << COLOR_RESET << std::endl << std::flush;
     
     outfile.flush();
     outfile.close();
@@ -309,7 +311,7 @@ int receive_file_tls(std::string relative_start_directory, Connection* conn, Eve
     }
     // everything worked remove temp file if it exists
     if (old_exists) {
-        printf("[send_recive.cpp:receive_file_tls] Removing temporary file: %s\n", (output_path.string() + ".tmp").c_str());
+        std::cout << FILE_COLOR << "[send_recive.cpp:receive_file_tls] Removing temporary file: " << (output_path.string() + ".tmp") << COLOR_RESET << "\n";
         std::filesystem::remove(output_path.string() + ".tmp");
     }
     return 0;
@@ -322,7 +324,7 @@ int receive_directory_tls(std::string relative_start_directory, Connection* conn
         std::cerr << "[send_recive.cpp:receive_directory_tls] Failed to read directory name length\n" << std::flush;
         return -1;
     }
-    std::cout << "[send_recive.cpp:receive_directory_tls] Read directory name length: " << n1 << " bytes\n" << std::flush;
+    std::cout << FILE_COLOR << "[send_recive.cpp:receive_directory_tls] Read directory name length: " << n1 << " bytes" << COLOR_RESET << "\n" << std::flush;
     name_len = ntohl(name_len);
     if (name_len == 0 || name_len > 256) {
         std::cerr << "[send_recive.cpp:receive_directory_tls] Invalid directory name length: " << name_len << "\n" << std::flush;
@@ -335,7 +337,7 @@ int receive_directory_tls(std::string relative_start_directory, Connection* conn
         std::cerr << "[send_recive.cpp:receive_directory_tls] Failed to read directory name\n" << std::flush;
         return -1;
     }
-    std::cout << "[send_recive.cpp:receive_directory_tls] Read directory name: '" << dirname << "' (" << n2 << " bytes)\n" << std::flush;
+    std::cout << FILE_COLOR << "[send_recive.cpp:receive_directory_tls] Read directory name: '" << dirname << "' (" << n2 << " bytes)" << COLOR_RESET << "\n" << std::flush;
 
     std::filesystem::path dir_path(relative_start_directory);
     dir_path.append(dirname);
@@ -387,7 +389,7 @@ int receive_delete_path_tls(std::string relative_start_directory, Connection* co
         std::cerr << "[send_recive.cpp:receive_delete_path_tls] Failed to read path name length\n" << std::flush;
         return -1;
     }
-    std::cout << "[send_recive.cpp:receive_delete_path_tls] Read path name length: " << n1 << " bytes\n" << std::flush;
+    std::cout << FILE_COLOR << "[send_recive.cpp:receive_delete_path_tls] Read path name length: " << n1 << " bytes" << COLOR_RESET << "\n" << std::flush;
     name_len = ntohl(name_len);
     if (name_len == 0 || name_len > 256) {
         std::cerr << "[send_recive.cpp:receive_delete_path_tls] Invalid path name length: " << name_len << "\n" << std::flush;
@@ -400,7 +402,7 @@ int receive_delete_path_tls(std::string relative_start_directory, Connection* co
         std::cerr << "[send_recive.cpp:receive_delete_path_tls] Failed to read path name\n" << std::flush;
         return -1;
     }
-    std::cout << "[send_recive.cpp:receive_delete_path_tls] Read path name: '" << dirname << "' (" << n2 << " bytes)\n" << std::flush;
+    std::cout << FILE_COLOR << "[send_recive.cpp:receive_delete_path_tls] Read path name: '" << dirname << "' (" << n2 << " bytes)" << COLOR_RESET << "\n" << std::flush;
 
     // construct full path
     // Lock the path to prevent concurrent modifications
@@ -442,9 +444,9 @@ int receive_delete_path_tls(std::string relative_start_directory, Connection* co
     }
 
     if (removed_count > 0) {
-        std::cout << "[send_recive.cpp:receive_delete_path_tls] Deleted path: '" << dir_path.string() << "'\n" << std::flush;
+        std::cout << FILE_COLOR << "[send_recive.cpp:receive_delete_path_tls] Deleted path: '" << dir_path.string() << "'" << COLOR_RESET << "\n" << std::flush;
     } else {
-        std::cout << "[send_recive.cpp:receive_delete_path_tls] Delete target already absent, recording delete time: '" << dir_path.string() << "'\n" << std::flush;
+        std::cout << FILE_COLOR << "[send_recive.cpp:receive_delete_path_tls] Delete target already absent, recording delete time: '" << dir_path.string() << "'" << COLOR_RESET << "\n" << std::flush;
     }
 
     // Record deletion time so stale updates can be rejected later.
@@ -607,53 +609,53 @@ int handle_incoming_event(Connection* conn, std::string relative_start_directory
 
     switch (command) {
         case CommandType::UPLOAD_FILE: {
-            std::cout << "[send_recive.cpp:handle_incoming_event] Received upload command\n";
+            std::cout << FILE_COLOR << "[send_recive.cpp:handle_incoming_event] Received upload command" << COLOR_RESET << "\n";
             result = receive_file_tls(relative_start_directory, conn, out_event);
             if (result < 0) {
                 std::cerr << "[send_recive.cpp:handle_incoming_event] Failed to receive file\n";
             }
             break;
         } case CommandType::UPLOAD_DIRECTORY: {
-            std::cout << "[send_recive.cpp:handle_incoming_event] Received upload directory command\n";
+            std::cout << FILE_COLOR << "[send_recive.cpp:handle_incoming_event] Received upload directory command" << COLOR_RESET << "\n";
             result = receive_directory_tls(relative_start_directory, conn, out_event);
             if (result < 0) {
                 std::cerr << "[send_recive.cpp:handle_incoming_event] Failed to receive directory\n";
             }
             break;
         } case CommandType::DELETE_PATH: {
-            std::cout << "[send_recive.cpp:handle_incoming_event] Received delete path command\n";
+            std::cout << FILE_COLOR << "[send_recive.cpp:handle_incoming_event] Received delete path command" << COLOR_RESET << "\n";
             result = receive_delete_path_tls(relative_start_directory, conn, out_event);
             if (result < 0) {
                 std::cerr << "[send_recive.cpp:handle_incoming_event] Failed to delete path\n";
             }
             break;
         } case CommandType::REQUEST_NEXT_PENDING_EVENT: {
-            std::cout << "[send_recive.cpp:handle_incoming_event] Received request pending events command\n";
+            std::cout << FILE_COLOR << "[send_recive.cpp:handle_incoming_event] Received request pending events command" << COLOR_RESET << "\n";
             result = receive_handle_request_pending_event_tls(relative_start_directory, conn, out_event);
             if (result < 0) {
                 std::cerr << "[send_recive.cpp:handle_incoming_event] Failed to process request pending events command\n";
             }
             break;
         } case CommandType::REQUEST_NUMBER_PENDING_EVENTS: {
-            std::cout << "[send_recive.cpp:handle_incoming_event] Received request number of pending events command from client\n";
+            std::cout << FILE_COLOR << "[send_recive.cpp:handle_incoming_event] Received request number of pending events command from client" << COLOR_RESET << "\n";
             result = 0; // No error, but no event data to return for this command, the server will respond to this command separately with the number of pending events
             break;
         } case CommandType::REQUEST_UPDATE_FOR_PATH: {
-            std::cout << "[send_recive.cpp:handle_incoming_event] Received request update for path command from client\n";
+            std::cout << FILE_COLOR << "[send_recive.cpp:handle_incoming_event] Received request update for path command from client" << COLOR_RESET << "\n";
             result = receive_handle_request_update_for_path(relative_start_directory, conn);
             if (result < 0) {
                 std::cerr << "[send_recive.cpp:handle_incoming_event] Failed to process request update for path command\n";
             }
             break;
         } case CommandType::REQUEST_DIRECTORY_STRUCTURE: {
-            std::cout << "[send_recive.cpp:handle_incoming_event] Received request directory structure command from client\n";
+            std::cout << FILE_COLOR << "[send_recive.cpp:handle_incoming_event] Received request directory structure command from client" << COLOR_RESET << "\n";
             result = receive_handle_request_directory_structure(relative_start_directory, conn);
             if (result < 0) {
                 std::cerr << "[send_recive.cpp:handle_incoming_event] Failed to process request directory structure command\n";
             }
             break;
         } case CommandType::NOTHING: {
-            std::cout << "[send_recive.cpp:handle_incoming_event] Received nothing command from client, no event to process\n";
+            std::cout << FILE_COLOR << "[send_recive.cpp:handle_incoming_event] Received nothing command from client, no event to process" << COLOR_RESET << "\n";
             result = 2; // No error, but no event data to return for this command
             break;
         } default: {
@@ -664,7 +666,7 @@ int handle_incoming_event(Connection* conn, std::string relative_start_directory
     }
     // TODO make an event if we have a newer version of a file than the client probs to be done in the server code
     if (result == 1) { // result of 1 indicates update not accepted because incoming is not newer than existing
-        std::cout << "[send_recive.cpp:handle_incoming_event] No update needed for event type: " << command << " creating event to send update other way\n";
+        std::cout << FILE_COLOR << "[send_recive.cpp:handle_incoming_event] No update needed for event type: " << command << " creating event to send update other way" << COLOR_RESET << "\n";
         auto path = std::filesystem::path(relative_start_directory).append(out_event->path);
         auto mod_time = get_file_modification_time(path);
         CommandType event_type;
@@ -694,7 +696,7 @@ int handle_send_event(Connection* conn, std::string relative_start_directory, Ev
     if (event->path != "." && event->path != "..") {
         switch (event->type) {
             case CommandType::UPLOAD_FILE: {
-                printf("[send_recive.cpp:handle_send_event] Processing upload file event for path: %s\n", event->path.c_str());
+                std::cout << FILE_COLOR << "[send_recive.cpp:handle_send_event] Processing upload file event for path: " << event->path << COLOR_RESET << "\n";
                 int result = send_file_tls(relative_start_directory, event->path, conn);
                 if (result < 0) {
                     std::cerr << "[send_recive.cpp:handle_send_event] Failed to send file: " << event->path << "\n";
@@ -705,42 +707,42 @@ int handle_send_event(Connection* conn, std::string relative_start_directory, Ev
                 }
                 break;
             } case CommandType::DELETE_PATH: {
-                printf("[send_recive.cpp:handle_send_event] Processing delete path event for path: %s\n", event->path.c_str());
+                std::cout << FILE_COLOR << "[send_recive.cpp:handle_send_event] Processing delete path event for path: " << event->path << COLOR_RESET << "\n";
                 if (send_delete_path_tls(relative_start_directory, event->path, event->timestamp, conn) < 0) {
                     std::cerr << "[send_recive.cpp:handle_send_event] Failed to send delete path request: " << event->path << "\n";
                     return -1;
                 }
                 break;
             } case CommandType::UPLOAD_DIRECTORY: {
-                printf("[send_recive.cpp:handle_send_event] Processing upload directory event for path: %s\n", event->path.c_str());
+                std::cout << FILE_COLOR << "[send_recive.cpp:handle_send_event] Processing upload directory event for path: " << event->path << COLOR_RESET << "\n";
                 if (send_directory_tls(relative_start_directory, event->path, conn) < 0) {
                     std::cerr << "[send_recive.cpp:handle_send_event] Failed to send directory: " << event->path << "\n";
                     return -1;
                 }
                 break;
             } case CommandType::REQUEST_NEXT_PENDING_EVENT: {
-                printf("[send_recive.cpp:handle_send_event] Processing request next pending event command\n");
+                std::cout << FILE_COLOR << "[send_recive.cpp:handle_send_event] Processing request next pending event command" << COLOR_RESET << "\n";
                 if (send_handle_request_pending_event_tls(conn, relative_start_directory) < 0) {
                     std::cerr << "[send_recive.cpp:handle_send_event] Failed to send request handle pending event command\n";
                     return -1;
                 }
                 return 0;
             } case CommandType::REQUEST_NUMBER_PENDING_EVENTS: {
-                printf("[send_recive.cpp:handle_send_event] Processing request number of pending events command\n");
+                std::cout << FILE_COLOR << "[send_recive.cpp:handle_send_event] Processing request number of pending events command" << COLOR_RESET << "\n";
                 if (send_request_number_pending_events_tls(conn) < 0) {
                     std::cerr << "[send_recive.cpp:handle_send_event] Failed to send request number of pending events command\n";
                     return -1;
                 }
                 return 0;
             } case CommandType::REQUEST_UPDATE_FOR_PATH: {
-                printf("[send_recive.cpp:handle_send_event] Processing request update for path command for path: %s\n", event->path.c_str());
+                std::cout << FILE_COLOR << "[send_recive.cpp:handle_send_event] Processing request update for path command for path: " << event->path << COLOR_RESET << "\n";
                 if (send_handle_request_update_for_path(conn, relative_start_directory, event->path) < 0) {
                     std::cerr << "[send_recive.cpp:handle_send_event] Failed to process request update for path command for path: " << event->path << "\n";
                     return -1;
                 }
                 return 0;
             } case CommandType::REQUEST_DIRECTORY_STRUCTURE: {
-                printf("[send_recive.cpp:handle_send_event] Processing request directory structure command\n");
+                std::cout << FILE_COLOR << "[send_recive.cpp:handle_send_event] Processing request directory structure command" << COLOR_RESET << "\n";
                 if (send_request_directory_structure(conn, out_response) < 0) {
                     std::cerr << "[send_recive.cpp:handle_send_event] Failed to process request directory structure command\n";
                     return -1;
@@ -751,7 +753,7 @@ int handle_send_event(Connection* conn, std::string relative_start_directory, Ev
                 return -2; // return -2 to indicate unknown event type
             }
         }
-        std::cout << "[send_recive.cpp:handle_send_event] Processed event: " << event->type << " for path: " << event->path << "\n";
+        std::cout << FILE_COLOR << "[send_recive.cpp:handle_send_event] Processed event: " << event->type << " for path: " << event->path << COLOR_RESET << "\n";
         return 0;
     } else {
         std::cerr << "[send_recive.cpp:handle_send_event] Skipping event with invalid path: " << event->path << "\n";

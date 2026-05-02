@@ -16,6 +16,9 @@
 #include "file_system_evaluator.h"
 #include <command.h>
 
+#define FILE_COLOR "\033[1;31m" // Red for main.cpp
+#define COLOR_RESET "\033[0m"
+
 
 
 std::string device_name;
@@ -36,11 +39,11 @@ void ensure_dir(const std::string& path) {
 }
 
 int main(int argc, char *argv[]) {
-	if (argc != 7) {
-		fprintf(stderr, "Usage: %s <device_name> <server_ip> <server_port> <num_threads/concurrent_connections> <tracked_directory> <data_directory>\n", argv[0]);
-		return 1;
-	}
-	printf("Starting AmberSyncFS client with device: %s, server IP: %s, server port: %s, num_threads: %s, tracking directory: %s, data_directory: %s\n", argv[1], argv[2], argv[3], argv[4], argv[5], argv[6]);
+    if (argc != 7) {
+        std::cerr << "Usage: " << argv[0] << " <device_name> <server_ip> <server_port> <num_threads/concurrent_connections> <tracked_directory> <data_directory>\n";
+        return 1;
+    }
+    std::cout << FILE_COLOR << "Starting AmberSyncFS client with device: " << argv[1] << ", server IP: " << argv[2] << ", server port: " << argv[3] << ", num_threads: " << argv[4] << ", tracking directory: " << argv[5] << ", data_directory: " << argv[6] << COLOR_RESET << "\n";
 	device_name = argv[1];
 	server_ip = argv[2];
 	server_port = std::stoi(argv[3]);
@@ -109,7 +112,7 @@ int main(int argc, char *argv[]) {
 			continue;
 		}
 
-		printf("Received directory structure snapshot from server: %s\n", server_snapshot.c_str());
+		std::cout << FILE_COLOR << "Received directory structure snapshot from server: " << server_snapshot << COLOR_RESET << "\n";
 
 		events = parse_snapshot(server_snapshot, track_root);
 		
@@ -117,14 +120,14 @@ int main(int argc, char *argv[]) {
 		sucess = true;
 	}
 
-	printf("local directroy structure: %s\n", generate_snapshot(track_root).c_str());
+	std::cout << FILE_COLOR << "local directroy structure: " << generate_snapshot(track_root) << COLOR_RESET << "\n";
 
 	// process the events
-	std::cout << "Checked directory structure with server, found " << events.size() << " events to process\n";
+		std::cout << FILE_COLOR << "Checked directory structure with server, found " << events.size() << " events to process" << COLOR_RESET << "\n";
 	while (!events.empty()) {
 		handle_all_pending_events(); // handle any pending events that may have been created from handling the directory structure events to ensure most up-to-date state
 		auto event = events.back(); // get the last event to handle it, we will remove it from the list after handling it
-		std::cout << "handling:  Type: " << static_cast<int>(event.type) << ", Path: " << event.path << "\n";
+			std::cout << FILE_COLOR << "handling:  Type: " << static_cast<int>(event.type) << ", Path: " << event.path << COLOR_RESET << "\n";
 		auto conn = try_establish_connection(server_ip, server_port);
 		if (start_of_connection(conn) < 0) {
 			std::cerr << "Failed to initialize server connection for startup routine directory structure check event handling\n";

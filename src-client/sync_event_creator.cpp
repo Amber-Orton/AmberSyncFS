@@ -10,9 +10,12 @@
 #include "send_recive_helper.h"
 #include "database.h"
 
+#define FILE_COLOR "\033[1;33m" // Yellow for sync_event_creator.cpp
+#define COLOR_RESET "\033[0m"
+
 
 void upload_file(const std::string& relative_path) {
-    printf("creating upload event file: %s\n", relative_path.c_str());
+    std::cout << FILE_COLOR << "creating upload event file: " << relative_path << COLOR_RESET << "\n";
     auto mod_time = get_file_modification_time(relative_path);
 
     if (create_event_checked(CommandType::UPLOAD_FILE, relative_path, mod_time) < 0) {
@@ -22,7 +25,7 @@ void upload_file(const std::string& relative_path) {
 }
 
 void delete_file(const std::string& relative_path) {
-    printf("creating delete event file: %s\n", relative_path.c_str());
+    std::cout << FILE_COLOR << "creating delete event file: " << relative_path << COLOR_RESET << "\n";
     auto current_time = std::chrono::system_clock::to_time_t(std::chrono::system_clock::now());
      
     if (create_event_checked(CommandType::DELETE_PATH, relative_path, current_time) < 0) {
@@ -32,7 +35,7 @@ void delete_file(const std::string& relative_path) {
 }
 
 void upload_directory(const std::string& relative_path) {
-    printf("creating upload directory event file: %s\n", relative_path.c_str());
+    std::cout << FILE_COLOR << "creating upload directory event file: " << relative_path << COLOR_RESET << "\n";
     auto mod_time = get_file_modification_time(relative_path);
     
     if (create_event_checked(CommandType::UPLOAD_DIRECTORY, relative_path, mod_time) < 0) {
@@ -42,7 +45,7 @@ void upload_directory(const std::string& relative_path) {
 }
 
 void delete_directory(const std::string& relative_path) {
-    printf("creating delete directory event file: %s\n", relative_path.c_str());
+    std::cout << FILE_COLOR << "creating delete directory event file: " << relative_path << COLOR_RESET << "\n";
     auto current_time = std::chrono::system_clock::to_time_t(std::chrono::system_clock::now());
     
     if (create_event_checked(CommandType::DELETE_PATH, relative_path, current_time) < 0) {
@@ -53,7 +56,7 @@ void delete_directory(const std::string& relative_path) {
 
 int create_event_checked(const CommandType& event_type, const std::string& relative_path, uint64_t mod_time) {
     if (timer_set_instance.check(event_type, relative_path, mod_time) == 1) {
-        std::cout << "Event creation skipped by timer set check for event type: " << event_type << ", relative path: " << relative_path << "\n";
+        std::cout << FILE_COLOR << "Event creation skipped by timer set check for event type: " << event_type << ", relative path: " << relative_path << COLOR_RESET << "\n";
         return 1; // Event creation not needed based on timer set check
     }
     create_event(event_type, relative_path, mod_time);

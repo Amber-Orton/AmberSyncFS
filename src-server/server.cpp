@@ -16,6 +16,9 @@
 #include "database.h"
 #include "send_recive.h"
 
+#define FILE_COLOR "\033[1;92m" // Bright green for server.cpp
+#define COLOR_RESET "\033[0m"
+
 int port = 0;
 std::string tracked_files_directory;
 std::string data_directory;
@@ -23,10 +26,10 @@ std::string data_directory;
 
 
 int main(int argc, char *argv[]) {
-	if (argc != 4) {
-        fprintf(stderr, "[server.cpp:main] Usage: %s <port> <tracked_files_directory> <data_directory>\n", argv[0]);
-		return 1;
-	}
+    if (argc != 4) {
+        std::cerr << FILE_COLOR << "[server.cpp:main] Usage: " << argv[0] << " <port> <tracked_files_directory> <data_directory>" << COLOR_RESET << "\n";
+        return 1;
+    }
 
     // collect the port and directory to be synced to
     // and check that they exist and are valid
@@ -112,7 +115,7 @@ int main(int argc, char *argv[]) {
         return 1;
     }
 
-    std::cout << "[server.cpp:main] TLS server listening on port " << port << std::endl;
+    std::cout << FILE_COLOR << "[server.cpp:main] TLS server listening on port " << port << COLOR_RESET << std::endl;
 
     while (true) {
         sockaddr_in client_addr{};
@@ -162,7 +165,7 @@ int main(int argc, char *argv[]) {
                 return;
             }
             client_name_ch[client_name_len] = '\0'; // Null-terminate the client name
-            std::cout << "[server.cpp:main] Client connected with name: " << client_name_ch.data() << "\n";
+            std::cout << FILE_COLOR << "[server.cpp:main] Client connected with name: " << client_name_ch.data() << COLOR_RESET << "\n";
             std::string client_name = std::string(client_name_ch.data());
 
             add_user(client_name); // add the client to the database if it doesnt exist
@@ -210,12 +213,12 @@ void end_of_connection(Connection* conn, Event& event) {
     // send number of events that the client need to process
     uint64_t num_events = get_pending_event_count(event.client_id);
     uint64_t num_events_net = htonl(num_events);
-    std::cout << "[server.cpp:end_of_connection] Number of pending events for client '" << event.client_id << "': " << num_events << "\n";
+    std::cout << FILE_COLOR << "[server.cpp:end_of_connection] Number of pending events for client '" << event.client_id << "': " << num_events << COLOR_RESET << "\n";
     if (safe_SSL_write(conn, &num_events_net, sizeof(num_events_net)) < 0) {
         std::cerr << "[server.cpp:end_of_connection] Failed to send number of pending events to client: " << event.client_id << "\n";
     }
 
-    std::cout << "[server.cpp:end_of_connection] Closing connection with client: " << event.client_id << "\n";
+    std::cout << FILE_COLOR << "[server.cpp:end_of_connection] Closing connection with client: " << event.client_id << COLOR_RESET << "\n";
     close_connection(conn);
 
     // create events for all other clients to process the changes from this client
@@ -227,18 +230,18 @@ void end_of_connection(Connection* conn, Event& event) {
     case CommandType::REQUEST_DIRECTORY_STRUCTURE:
     case CommandType::NOTHING:
         // Do not create events for other clients
-        std::cout << "[server.cpp:end_of_connection] No events to create for other clients for event: " << event.type << ":" << event.path << "\n";
+        std::cout << FILE_COLOR << "[server.cpp:end_of_connection] No events to create for other clients for event: " << event.type << ":" << event.path << COLOR_RESET << "\n";
         break;
     case CommandType::UPLOAD_FILE:
     case CommandType::UPLOAD_DIRECTORY:
     case CommandType::DELETE_PATH:
     case CommandType::REQUEST_UPDATE_FOR_PATH:
         // Create events for other clients
-        std::cout << "[server.cpp:end_of_connection] Creating events for other clients to process changes from client '" << event.client_id << "for event: " << event.type << ":" << event.path << "'\n";
+        std::cout << FILE_COLOR << "[server.cpp:end_of_connection] Creating events for other clients to process changes from client '" << event.client_id << "for event: " << event.type << ":" << event.path << "'" << COLOR_RESET << "\n";
         for (std::string user : get_users()) {
-            std::cout << "[server.cpp:end_of_connection] Checking if event for user '" << user << "' needs to be created\n";
+            std::cout << FILE_COLOR << "[server.cpp:end_of_connection] Checking if event for user '" << user << "' needs to be created" << COLOR_RESET << "\n";
             if (user != origional_client_id) {
-                std::cout << "[server.cpp:end_of_connection] Creating event for user '" << user << "' to process changes from client '" << origional_client_id << "'\n";
+                std::cout << FILE_COLOR << "[server.cpp:end_of_connection] Creating event for user '" << user << "' to process changes from client '" << origional_client_id << "'" << COLOR_RESET << "\n";
                 event.client_id = user;
                 create_event(event);
             }
@@ -246,7 +249,7 @@ void end_of_connection(Connection* conn, Event& event) {
         break;
     }
 
-    std::cout << "[server.cpp:end_of_connection] Finished everything for client '" << origional_client_id << "'\n";
+    std::cout << FILE_COLOR << "[server.cpp:end_of_connection] Finished everything for client '" << origional_client_id << "'" << COLOR_RESET << "\n";
 }
 
 void close_connection(Connection* conn) {

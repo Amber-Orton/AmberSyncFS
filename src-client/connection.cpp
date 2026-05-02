@@ -16,6 +16,9 @@
 #include <condition_variable>
 #include "send_recive_helper.h"
 
+#define FILE_COLOR "\033[1;32m" // Green for connection.cpp
+#define COLOR_RESET "\033[0m"
+
 
 
 std::atomic<bool> is_connected{false};
@@ -48,7 +51,7 @@ Connection* try_establish_connection(const std::string& server_ip, int port) {
             if (time_since_last_attempt < connection_retry_timeout) {
                 double jitter = 0.9 + (rand() % 21) / 100.0; // 0.90 to 1.10
                 auto wait_time = std::chrono::duration_cast<std::chrono::milliseconds>((connection_retry_timeout - time_since_last_attempt) * jitter);
-                std::cout << "[connection.cpp:try_establish_connection] Waiting before next connection attempt for " << wait_time << "\n";
+                std::cout << FILE_COLOR << "[connection.cpp:try_establish_connection] Waiting before next connection attempt for " << wait_time << COLOR_RESET << "\n";
                 std::this_thread::sleep_for(wait_time);
             }
             // attempt connection
@@ -57,7 +60,7 @@ Connection* try_establish_connection(const std::string& server_ip, int port) {
             if (conn != nullptr) {
                 is_connected.store(true);
                 connection_retry_timeout = std::chrono::seconds(1); // reset retry timeout after successful connection
-                std::cout << "[connection.cpp:try_establish_connection] Successfully established connection to server\n";
+                std::cout << FILE_COLOR << "[connection.cpp:try_establish_connection] Successfully established connection to server" << COLOR_RESET << "\n";
                 return conn;
             } else {
                 connection_retry_timeout = std::min(connection_retry_timeout * 2, max_retry_timeout);
@@ -162,14 +165,14 @@ int start_of_connection(Connection* conn) {
 
 int end_of_connection(Connection* conn) {
     if (!conn) return -1;
-    std::cout << "[connection.cpp:end_of_connection] Waiting for pending events from server...\n";
+    std::cout << FILE_COLOR << "[connection.cpp:end_of_connection] Waiting for pending events from server..." << COLOR_RESET << "\n";
     uint64_t num_events_net;
     if (safe_SSL_read(conn, &num_events_net, sizeof(num_events_net)) <= 0) {
         std::cerr << "[connection.cpp:end_of_connection] Failed to read number of pending events from server\n";
         return close_connection(conn);
     }
     uint64_t num_events = ntohl(num_events_net);
-    std::cout << "[connection.cpp:end_of_connection] Number of pending events from server: " << num_events << "\n";
+    std::cout << FILE_COLOR << "[connection.cpp:end_of_connection] Number of pending events from server: " << num_events << COLOR_RESET << "\n";
     pending_events.store(num_events);
     for (uint64_t i = 0; i < num_events && i < num_threads; ++i) {
         events_cv.notify_one();

@@ -9,6 +9,8 @@
 #include "main.h"
 #include <iostream>
 
+#define FILE_COLOR "\033[1;31m" // Red for tracker.cpp
+#define COLOR_RESET "\033[0m"
 
 #define EVENT_SIZE (sizeof(struct inotify_event))
 #define BUF_LEN (1024 * (EVENT_SIZE + 16))
@@ -59,7 +61,7 @@ void start_tracking() {
                 }
                 unsigned known = IN_MODIFY | IN_CREATE | IN_DELETE | IN_DELETE_SELF | IN_ISDIR | IN_MOVED_FROM | IN_MOVED_TO;
                 if ((event->mask & ~known) != 0) {
-                    printf("Unknown/other event: %u\n", event->mask);
+                    std::cout << FILE_COLOR << "Unknown/other event: " << event->mask << COLOR_RESET << "\n";
                 }
             }
 
