@@ -232,6 +232,7 @@ void end_of_connection(Connection* conn, Event& event) {
     case CommandType::UPLOAD_FILE:
     case CommandType::UPLOAD_DIRECTORY:
     case CommandType::DELETE_PATH:
+    case CommandType::REQUEST_UPDATE_FOR_PATH:
         // Create events for other clients
         std::cout << "[server.cpp:end_of_connection] Creating events for other clients to process changes from client '" << event.client_id << "for event: " << event.type << ":" << event.path << "'\n";
         for (std::string user : get_users()) {

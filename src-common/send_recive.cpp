@@ -23,6 +23,7 @@
 #include "file_lock.h"
 #include "command.h"
 #include "file_system_evaluator.h"
+#include "../src-client/include/main.h"
 
 
 // functions to handle sending and reciving events
@@ -591,69 +592,101 @@ int handle_incoming_event(Connection* conn, std::string relative_start_directory
         std::cerr << "[send_recive.cpp:handle_incoming_event] Failed to read command\n";
         return -1;
     }
-    if (out_event) {
-        out_event->type = command;
+    Event event;
+    if (!out_event) {
+        out_event = &event; // Use local event if out_event is null
     }
+    out_event->type = command;
 
 
     // Handle command, its the programmers responsibility to ensure that commands are all distinct and of a fixed length
     // each in a thread, allows infinite clients to connect and send commands without blocking each other
     // means can be DOSed by opening many connections and sending commands without closing them but clients are certified and assumed to be non-malicious
     
+    int result = -1;
+
     switch (command) {
         case CommandType::UPLOAD_FILE: {
             std::cout << "[send_recive.cpp:handle_incoming_event] Received upload command\n";
-            int result = receive_file_tls(relative_start_directory, conn, out_event);
+            result = receive_file_tls(relative_start_directory, conn, out_event);
             if (result < 0) {
                 std::cerr << "[send_recive.cpp:handle_incoming_event] Failed to receive file\n";
             }
-            return result;
+            break;
         } case CommandType::UPLOAD_DIRECTORY: {
             std::cout << "[send_recive.cpp:handle_incoming_event] Received upload directory command\n";
-            int result = receive_directory_tls(relative_start_directory, conn, out_event);
+            result = receive_directory_tls(relative_start_directory, conn, out_event);
             if (result < 0) {
                 std::cerr << "[send_recive.cpp:handle_incoming_event] Failed to receive directory\n";
             }
-            return result;
+            break;
         } case CommandType::DELETE_PATH: {
             std::cout << "[send_recive.cpp:handle_incoming_event] Received delete path command\n";
-            int result = receive_delete_path_tls(relative_start_directory, conn, out_event);
+            result = receive_delete_path_tls(relative_start_directory, conn, out_event);
             if (result < 0) {
                 std::cerr << "[send_recive.cpp:handle_incoming_event] Failed to delete path\n";
             }
-            return result;
+            break;
         } case CommandType::REQUEST_NEXT_PENDING_EVENT: {
             std::cout << "[send_recive.cpp:handle_incoming_event] Received request pending events command\n";
-            int result = receive_handle_request_pending_event_tls(relative_start_directory, conn, out_event);
+            result = receive_handle_request_pending_event_tls(relative_start_directory, conn, out_event);
             if (result < 0) {
                 std::cerr << "[send_recive.cpp:handle_incoming_event] Failed to process request pending events command\n";
             }
-            return result; // No error, but no event data to return for this command
+            break;
         } case CommandType::REQUEST_NUMBER_PENDING_EVENTS: {
             std::cout << "[send_recive.cpp:handle_incoming_event] Received request number of pending events command from client\n";
-            return 0; // No error, but no event data to return for this command, the server will respond to this command separately with the number of pending events
+            result = 0; // No error, but no event data to return for this command, the server will respond to this command separately with the number of pending events
+            break;
         } case CommandType::REQUEST_UPDATE_FOR_PATH: {
             std::cout << "[send_recive.cpp:handle_incoming_event] Received request update for path command from client\n";
-            int result = receive_handle_request_update_for_path(relative_start_directory, conn);
+            result = receive_handle_request_update_for_path(relative_start_directory, conn);
             if (result < 0) {
                 std::cerr << "[send_recive.cpp:handle_incoming_event] Failed to process request update for path command\n";
             }
-            return result;
+            break;
         } case CommandType::REQUEST_DIRECTORY_STRUCTURE: {
             std::cout << "[send_recive.cpp:handle_incoming_event] Received request directory structure command from client\n";
-            int result = receive_handle_request_directory_structure(relative_start_directory, conn);
+            result = receive_handle_request_directory_structure(relative_start_directory, conn);
             if (result < 0) {
                 std::cerr << "[send_recive.cpp:handle_incoming_event] Failed to process request directory structure command\n";
             }
-            return result;
+            break;
         } case CommandType::NOTHING: {
             std::cout << "[send_recive.cpp:handle_incoming_event] Received nothing command from client, no event to process\n";
-            return 1; // No error, but no event data to return for this command
+            result = 2; // No error, but no event data to return for this command
+            break;
         } default: {
             std::cerr << "[send_recive.cpp:handle_incoming_event] Unknown command received from client: " << command << "\n";
-            return -1;
+            result = -1;
+            break;
         }
     }
+    // TODO make an event if we have a newer version of a file than the client probs to be done in the server code
+    if (result == 1) { // result of 1 indicates update not accepted because incoming is not newer than existing
+        std::cout << "[send_recive.cpp:handle_incoming_event] No update needed for event type: " << command << " creating event to send update other way\n";
+        auto path = std::filesystem::path(relative_start_directory).append(out_event->path);
+        auto mod_time = get_file_modification_time(path);
+        CommandType event_type;
+        if (std::filesystem::exists(path)) {
+            if (std::filesystem::is_directory(path)) {
+                event_type = CommandType::UPLOAD_DIRECTORY;
+            } else if (std::filesystem::is_regular_file(path)) {
+                event_type = CommandType::UPLOAD_FILE;
+            } else {
+                std::cerr << "[send_recive.cpp:handle_incoming_event] Path exists but is not a regular file or directory: " << path.string() << "\n";
+                return -1;
+            }
+        } else {
+            event_type = CommandType::DELETE_PATH;
+        }
+        create_event(event_type, out_event->path, mod_time, out_event->client_id);
+        // if client then wake an event handler
+        #ifdef SYNCFS_CLIENT
+            events_cv.notify_one();
+        #endif
+    }
+    return result;
 }
 
 int handle_send_event(Connection* conn, std::string relative_start_directory, Event* event, void* out_response) {

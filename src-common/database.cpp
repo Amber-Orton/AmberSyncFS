@@ -234,7 +234,7 @@ void remove_event(int id) {
     sqlite3_finalize(stmt);
 }
 
-// retrive the number of events pending for a client
+// retrieve the number of events pending for a client
 uint64_t get_pending_event_count(const std::string& client_id = "") {
     std::lock_guard<std::mutex> lock(db_mutex);
     if (!db) {

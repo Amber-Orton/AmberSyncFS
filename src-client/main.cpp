@@ -108,11 +108,16 @@ int main(int argc, char *argv[]) {
 			close_connection(conn);
 			continue;
 		}
+
+		printf("Received directory structure snapshot from server: %s\n", server_snapshot.c_str());
+
 		events = parse_snapshot(server_snapshot, track_root);
 		
 		// all successfull
 		sucess = true;
 	}
+
+	printf("local directroy structure: %s\n", generate_snapshot(track_root).c_str());
 
 	// process the events
 	std::cout << "Checked directory structure with server, found " << events.size() << " events to process\n";

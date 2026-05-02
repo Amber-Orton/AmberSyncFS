@@ -19,8 +19,9 @@ void handle_events() {
         auto event = get_and_set_in_progress_next_event();
         auto pending_events_count = pending_events.load();
         if (event || pending_events_count > 0) {
+            
             auto conn = try_establish_connection(server_ip, server_port);
-
+            
             if (start_of_connection(conn) < 0) {
                 std::cerr << "Failed to initialize server connection\n";
                 close_connection(conn);
@@ -28,6 +29,8 @@ void handle_events() {
                 continue;
             }
             if (event) {
+                // first wake another handler incase there are more
+                events_cv.notify_one(); // other handler will check and sleep again if no more events
                 int success = handle_send_event(conn, track_root, &event.value());
                 if (success < 0) {
                     if (success == -1) {
@@ -48,11 +51,15 @@ void handle_events() {
                     reset_in_progress_event(event->id); // re-add the event to the database to retry later
                     continue;
                 }
+                // event was successfully handled, remove it from the database
+                remove_event(event->id);
 
             } else if (uint64_t events = pending_events.fetch_sub(1) > 0) {
+                // first wake another handler incase there are more
+                events_cv.notify_one(); // other handler will check and sleep again if no more events
 
                 // deal with pending events only if not handling local event
-                std::cout << events << " pending events remaining processing one now\n";
+                std::cout <<"\033[1;32m" << events << " pending events remaining processing one now\033[0m\n";
                 auto conn = try_establish_connection(server_ip, server_port);
                 if (start_of_connection(conn) < 0) {
                     std::cerr << "Failed to initialize server connection for pending events\n";
@@ -82,10 +89,30 @@ void handle_events() {
                 continue;
             }
         } else {
-            // Use a dummy mutex and defer_lock to avoid creating a new mutex every time
-            std::unique_lock<std::mutex> wait_lock(dummy_mutex, std::defer_lock);
-            events_cv.wait_for(wait_lock, std::chrono::seconds(1));
-            std::cout << "woke up" << std::endl;
+            // check if there are any new pending events every 30 seconds
+            auto conn = try_establish_connection(server_ip, server_port);
+            if (start_of_connection(conn) < 0) {
+                std::cerr << "Failed to initialize server connection for pending events check\n";
+                close_connection(conn);
+                continue;
+            }
+            if (send_request_number_pending_events_tls(conn) < 0) {
+                std::cerr << "Failed to send request for number of pending events\n";
+                close_connection(conn);
+                continue;
+            }
+            if (end_of_connection(conn) < 0) {
+                std::cerr << "Failed to finalize server connection for pending events check\n";
+                close_connection(conn);
+                continue;
+            }
+
+            if (pending_events.load() == 0) { // if still no pending events wait for 30 seconds or until notified of new events
+                // Use a dummy mutex and defer_lock to avoid creating a new mutex every time
+                std::unique_lock<std::mutex> wait_lock(dummy_mutex, std::defer_lock);
+                events_cv.wait_for(wait_lock, std::chrono::seconds(30));
+                std::cout <<"\033[1;32m" << "woke up" << "\033[0m\n";
+            }
         }
     }
 }
@@ -111,6 +138,6 @@ void handle_all_pending_events() {
             pending_events.fetch_add(1); // re-add the pending event count to retry later
             continue;
         }
-        std::cout << "Handled a pending event from server, remaining pending events: " << pending_events.load() << "\n";
+        std::cout <<"\033[1;32m" << "Handled a pending event from server, remaining pending events: " << pending_events.load() << "\033[0m\n";
     }
 }
