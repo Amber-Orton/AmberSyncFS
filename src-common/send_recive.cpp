@@ -341,7 +341,7 @@ int receive_directory_tls(std::string relative_start_directory, Connection* conn
 
     std::filesystem::path dir_path(relative_start_directory);
     dir_path.append(dirname);
-    FileLockGuard guard(dir_path.lexically_normal().string()); // Lock normalized directory path
+    FileLockGuard guard(dir_path);
 
     // update out_event
     if (out_event) {
@@ -362,7 +362,7 @@ int receive_directory_tls(std::string relative_start_directory, Connection* conn
     }
 
     auto current_mod_time = get_file_modification_time(dir_path.string());
-    if (mod_time <= current_mod_time) {
+    if (mod_time < current_mod_time) {
         std::cerr << "[send_recive.cpp:receive_directory_tls] Received directory is not newer than existing directory. Skipping update for '" << dirname << "'\n" << std::flush;
         return 1; // Not an error, just no update needed
     }
@@ -668,7 +668,6 @@ int handle_incoming_event(Connection* conn, std::string relative_start_directory
     if (result == 1) { // result of 1 indicates update not accepted because incoming is not newer than existing
         std::cout << FILE_COLOR << "[send_recive.cpp:handle_incoming_event] No update needed for event type: " << command << " creating event to send update other way" << COLOR_RESET << "\n";
         auto path = std::filesystem::path(relative_start_directory).append(out_event->path);
-        auto mod_time = get_file_modification_time(path);
         CommandType event_type;
         if (std::filesystem::exists(path)) {
             if (std::filesystem::is_directory(path)) {
@@ -682,6 +681,7 @@ int handle_incoming_event(Connection* conn, std::string relative_start_directory
         } else {
             event_type = CommandType::DELETE_PATH;
         }
+        auto mod_time = get_file_modification_time(path);
         create_event(event_type, out_event->path, mod_time, out_event->client_id);
         // if client then wake an event handler
         #ifdef SYNCFS_CLIENT

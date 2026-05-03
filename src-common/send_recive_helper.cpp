@@ -41,27 +41,22 @@ uint64_t get_file_modification_time(const std::string& file_path) {
         return get_delete_mtime(full_file_path); //if doesnt exist check db
     }
     auto ftime = std::filesystem::last_write_time(full_file_path);
-    auto standard_time = std::chrono::time_point_cast<std::chrono::system_clock::duration>(
-        ftime - std::filesystem::file_time_type::clock::now()
-        + std::chrono::system_clock::now()
-    );
-    return std::chrono::system_clock::to_time_t(standard_time);
+    // Convert file_time_type to time_t (epoch seconds)
+    auto epoch_seconds = std::chrono::duration_cast<std::chrono::seconds>(ftime.time_since_epoch()).count();
+    return static_cast<uint64_t>(epoch_seconds);
 }
 
-int set_file_modification_time(const std::string& file_path, uint64_t mod_time) {
+int set_file_modification_time(const std::string& file_path, uint64_t epoch_seconds_mod_time) {
     std::filesystem::path full_file_path(file_path);
     full_file_path = full_file_path.lexically_normal(); // Normalize the file path to ensure consistent behavior
+    // convert epoch seconds to file_time_type
+    std::filesystem::file_time_type ftime = std::filesystem::file_time_type(std::chrono::seconds(epoch_seconds_mod_time));
+    
     if (std::filesystem::exists(full_file_path)) {
-        struct utimbuf new_times;
-        new_times.actime = mod_time; // access time
-        new_times.modtime = mod_time; // modification time
-        if (utime(full_file_path.c_str(), &new_times) != 0) {
-            std::cerr << "Failed to set file modification time for " << full_file_path << ": " << strerror(errno) << "\n";
-            return -1;
-        }
+        std::filesystem::last_write_time(full_file_path, ftime);
         return 0;
     } else {
-        set_delete_mtime(full_file_path, mod_time); // if doesnt exist set it as deleted
+        set_delete_mtime(full_file_path, epoch_seconds_mod_time); // if doesnt exist set it as deleted
         return 0;
     }
 }
